@@ -13,6 +13,12 @@ node_modules/
 .next/
 out/
 
+# OpenNext / Cloudflare
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts
+
 # Env / secrets
 .env
 .env.*
