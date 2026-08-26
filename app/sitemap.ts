@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { getBoardToday } from '@/lib/api'
+import { alternativesSlugs, comparisonSlugs } from '@/lib/comparisons'
 import { selectableCategories } from '@/lib/data'
 
 const BASE_URL = 'https://whoistop.lol'
@@ -11,6 +12,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE_URL, changeFrequency: 'hourly', priority: 1 },
     { url: `${BASE_URL}/contact`, changeFrequency: 'monthly', priority: 0.3 },
+    ...comparisonSlugs().map((slug) => ({
+      url: `${BASE_URL}/compare/${slug}`,
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+    })),
+    ...alternativesSlugs().map((slug) => ({
+      url: `${BASE_URL}/alternatives/${slug}`,
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+    })),
   ]
 
   const categoryRoutes: MetadataRoute.Sitemap = selectableCategories.map((c) => ({

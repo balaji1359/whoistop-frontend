@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SiteHeader } from '@/components/header'
 import {
@@ -303,6 +303,35 @@ function Milestone({ at }: { at: number }) {
 }
 
 /**
+ * Handles the `?paid=<domain>` hand-back from Stripe Checkout. Renders nothing.
+ *
+ * It exists only to quarantine `useSearchParams`. That hook opts its subtree
+ * out of server rendering, and the bailout stops at the nearest Suspense
+ * boundary — so with the whole board inside that boundary the page shipped an
+ * empty <body>, and every crawler that doesn't run JavaScript saw nothing at
+ * all. Isolated here, the bailout costs us this component and nothing else.
+ *
+ * Keep this component tiny, and never move a hook that reads the URL up into
+ * MarketingPage: that single line is the difference between a server-rendered
+ * board and a blank page for GPTBot, ClaudeBot, PerplexityBot and CCBot.
+ */
+function PaidRedirect({ onPaid }: { onPaid: (domain: string) => void }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const paid = searchParams.get('paid')
+    if (!paid) return
+    onPaid(paid)
+    // No "bid placed" modal; the live board already shows the new rank.
+    router.replace('/', { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  return null
+}
+
+/**
  * The seam where paid ranking stops. Placed once, not repeated per row: this
  * is the spot where the price of a rank is most obvious, because the listing
  * directly below it is holding a position for nothing.
@@ -326,8 +355,6 @@ export function MarketingPage({
 }) {
   const copy = variant === 'arena' ? arena : graffiti
   const wallet = useWallet()
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const { board, error: streamError } = useBoard(initialBoard)
   const [claimOpen, setClaimOpen] = useState(false)
   const [listed, setListed] = useState<LeaderboardEntry | null>(null)
@@ -339,14 +366,6 @@ export function MarketingPage({
   const [category, setCategory] = useState('all')
   const [url, setUrl] = useState('')
   const [heroCategory, setHeroCategory] = useState(DEFAULT_CATEGORY)
-  // No "bid placed" modal; the live board already shows the new rank.
-  useEffect(() => {
-    const paid = searchParams.get('paid')
-    if (!paid) return
-    wallet.markPaid(paid)
-    router.replace('/', { scroll: false })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
 
   async function payFor(entry: LeaderboardEntry, amountCents: number) {
     setCheckoutError(null)
@@ -466,6 +485,10 @@ export function MarketingPage({
 
   return (
     <>
+      <Suspense fallback={null}>
+        <PaidRedirect onPaid={wallet.markPaid} />
+      </Suspense>
+
       <a className="skip-link" href="#main">
         Skip to content
       </a>
