@@ -1,0 +1,28 @@
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Build / tooling
+*.tsbuildinfo
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.log
