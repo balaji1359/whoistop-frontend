@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SiteHeader } from '@/components/header'
@@ -9,7 +9,6 @@ import {
   DetailsModal,
   ListedModal,
 } from '@/components/modals'
-import { useCountdown } from '@/lib/use-countdown'
 import { useBoard } from '@/lib/use-board'
 import {
   arena,
@@ -23,8 +22,8 @@ import {
   valueStrip,
   type MarketingVariant,
 } from '@/lib/data'
-import type { BoardView, LeaderboardEntry } from '@/lib/api'
-import { productGoUrl } from '@/lib/api'
+import type { ActivityItem, BoardView, LeaderboardEntry } from '@/lib/api'
+import { getActivity, productGoUrl } from '@/lib/api'
 import { checkoutErrorMessage, startCheckout } from '@/lib/checkout'
 import { formatCount, formatListedAt } from '@/lib/format'
 import { listingMarkSrc } from '@/lib/logo'
@@ -114,7 +113,11 @@ function ListingBody({
           >
             {categoryLabel(entry.category) ?? 'Other'}
           </button>
-          <span aria-hidden="true">·</span>
+          {/* Accent only on the separator that follows the one interactive
+              thing in this line — it points at the filter, it isn't decoration. */}
+          <span className="meta-dot" aria-hidden="true">
+            •
+          </span>
           {/* Viewer-local time; the server prerenders this in UTC. */}
           <span suppressHydrationWarning>{formatListedAt(entry.listed_at)}</span>
           <span aria-hidden="true">·</span>
@@ -125,6 +128,176 @@ function ListingBody({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The live pulse of the board, from the rank history the backend already
+ * keeps. Only paid moves appear — a listing pushed down by somebody else's bid
+ * is not something anyone did, and padding the feed with passive movement
+ * would make a quiet board look busy.
+ */
+function ActivityFeed({ items }: { items: ActivityItem[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const [extra, setExtra] = useState<ActivityItem[] | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  if (items.length === 0) return null
+
+  const shown = expanded && extra ? extra : items
+
+  async function showMore() {
+    if (extra) {
+      setExpanded(true)
+      return
+    }
+    setLoading(true)
+    try {
+      setExtra(await getActivity(30))
+      setExpanded(true)
+    } catch {
+      // Leave the inline feed as-is; it is already the most recent slice.
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <section className="activity-card" aria-label="Latest activity">
+      <div className="activity-head">
+        <h2 className="strip-title">
+          <span className="strip-dot" aria-hidden="true" />
+          Latest activity
+        </h2>
+        {!expanded ? (
+          <button type="button" className="pill-btn" onClick={showMore} disabled={loading}>
+            {loading ? 'Loading…' : 'Show more'}
+          </button>
+        ) : (
+          <button type="button" className="pill-btn" onClick={() => setExpanded(false)}>
+            Show less
+          </button>
+        )}
+      </div>
+      <ol className={expanded ? 'activity-row is-expanded' : 'activity-row'}>
+        {shown.map((item) => (
+          <li key={`${item.product_id}-${item.occurred_at}`} className="activity-chip">
+            <Mark
+              letter={item.name[0]?.toUpperCase() ?? '?'}
+              domain={item.domain}
+              logoData={item.logo_data}
+              logoUrl={item.logo_url}
+            />
+            <div className="activity-body">
+              <span className="activity-name" title={item.name}>
+                {item.name}
+              </span>
+              <span className="activity-line num">
+                at #{item.rank} <span aria-hidden="true">·</span> ${item.amount_cents / 100}
+              </span>
+              <span className="activity-when num" suppressHydrationWarning>
+                {formatListedAt(item.occurred_at)}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+/**
+ * A "TOP 10" / "TOP 20" marker cutting across the list.
+ *
+ * It does two jobs. It breaks an otherwise endless ranking into segments you
+ * can hold in your head, and it draws a visible line to be above — which is
+ * the actual product: being #11 only means something once #10 is a threshold
+ * rather than just the row before you.
+ */
+function Milestone({ at }: { at: number }) {
+  return (
+    <div className="milestone" role="separator" aria-label={`Top ${at}`}>
+      <span className="milestone-pill num">TOP {at}</span>
+    </div>
+  )
+}
+
+/**
+ * The seam where paid ranking stops. Placed once, not repeated per row: this
+ * is the spot where the price of a rank is most obvious, because the listing
+ * directly below it is holding a position for nothing.
+ */
+function ClaimSeam({ price, onClaim }: { price: number; onClaim: () => void }) {
+  return (
+    <div className="claim-seam">
+      <button type="button" className="claim-seam-pill" onClick={onClaim}>
+        Claim this rank for ${price} ↗
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The two recency strips. They are windows over the same standing board, not
+ * separate boards: a listing here is also somewhere in the main ranking below.
+ * Bids are what make the windows move, so a quiet week renders nothing rather
+ * than an empty shell.
+ */
+function TopStrips({ daily, weekly }: { daily: LeaderboardEntry[]; weekly: LeaderboardEntry[] }) {
+  if (daily.length === 0 && weekly.length === 0) return null
+
+  return (
+    <section className="top-strips" aria-label="Recent top rankings">
+      <TopStrip title="Today's top ranking" hint="Bids placed in the last 24 hours" entries={daily} />
+      <TopStrip title="This week's top ranking" hint="Bids placed in the last 7 days" entries={weekly} />
+    </section>
+  )
+}
+
+function TopStrip({
+  title,
+  hint,
+  entries,
+}: {
+  title: string
+  hint: string
+  entries: LeaderboardEntry[]
+}) {
+  if (entries.length === 0) return null
+
+  return (
+    <div className="strip">
+      <div className="strip-head">
+        <h2 className="strip-title">
+          <span className="strip-dot" aria-hidden="true" />
+          {title}
+        </h2>
+        <span className="strip-hint">{hint}</span>
+      </div>
+      <ol className="strip-row">
+        {entries.map((entry) => (
+          <li key={entry.product_id} className={entry.rank === 1 ? 'strip-item is-lead' : 'strip-item'}>
+            <span className="strip-rank num">#{entry.rank}</span>
+            <Mark
+              letter={entry.name[0]?.toUpperCase() ?? '?'}
+              domain={entry.domain}
+              logoData={entry.logo_data}
+              logoUrl={entry.logo_url}
+            />
+            <a
+              className="strip-name proj-link"
+              href={productGoUrl(entry.product_id)}
+              target="_blank"
+              rel="sponsored noopener noreferrer"
+              title={entry.name}
+            >
+              {entry.name}
+            </a>
+            <span className="strip-amount num">${entry.amount_cents / 100}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
@@ -151,7 +324,6 @@ export function MarketingPage({
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [category, setCategory] = useState('all')
   const [url, setUrl] = useState('')
-  const clock = useCountdown(board?.ends_in_seconds)
 
   // Stripe success: /?paid=<domain>&… — mark the wallet and land on the board.
   // No "bid placed" modal; the live board already shows the new rank.
@@ -194,7 +366,18 @@ export function MarketingPage({
   // The #1 entry stays in the table as well as the hero card. Slicing it off
   // meant a board with a single listing rendered as "no projects yet".
   const rankedRows = useMemo(() => entries.filter(inCategory), [category, entries])
-  const freeRows = useMemo(() => unranked.filter(inCategory), [category, unranked])
+  // `unranked` mixes two different things: listings nobody has ever paid for,
+  // and paid listings that overflowed their category's slots. They price
+  // completely differently — outranking a free listing costs $1, outranking a
+  // paid one costs its bid plus the increment — so they cannot share a row.
+  const overflowRows = useMemo(
+    () => unranked.filter((item) => item.amount_cents > 0 && inCategory(item)),
+    [category, unranked],
+  )
+  const freeRows = useMemo(
+    () => unranked.filter((item) => item.amount_cents === 0 && inCategory(item)),
+    [category, unranked],
+  )
 
   const detected = url.trim() ? detectCategoryFromUrl(url) : null
 
@@ -202,7 +385,7 @@ export function MarketingPage({
     const all = [...entries, ...unranked]
     return {
       listings: all.length,
-      boardValue: entries.reduce((sum, e) => sum + e.amount_cents, 0) / 100,
+      boardValue: all.reduce((sum, e) => sum + e.amount_cents, 0) / 100,
       clicks: all.reduce((sum, e) => sum + e.clicks_today, 0),
     }
   }, [entries, unranked])
@@ -334,22 +517,21 @@ export function MarketingPage({
           </article>
         )}
 
-        <aside className="hero-reset" aria-label="Daily reset">
-          <div className="eyebrow">Daily reset in</div>
-          <div className="clock num" suppressHydrationWarning>
-            {clock.hours}
-            <small>hrs</small>
-            {clock.minutes}
-            <small>min</small>
-            {clock.seconds}
-            <small>sec</small>
-          </div>
-          <p className="reset-copy">{copy.resetNote}</p>
+        <aside className="hero-side" aria-label="How ranking works">
+          <div className="eyebrow">The rule</div>
+          <p className="hold-line">
+            Highest bid is <span className="accent">#1</span>.
+          </p>
+          <p className="hold-copy">{copy.holdNote}</p>
           <Link className="text-link" href="#how">
             Learn how it works →
           </Link>
         </aside>
       </section>
+
+      <TopStrips daily={board?.daily_top ?? []} weekly={board?.weekly_top ?? []} />
+
+      <ActivityFeed items={board?.activity ?? []} />
 
       {streamError ? (
         <div className="stream-warning" role="status">
@@ -469,7 +651,7 @@ export function MarketingPage({
           ) : null}
 
           <div className="board-panel">
-            {rankedRows.length === 0 && freeRows.length === 0 ? (
+            {rankedRows.length === 0 && overflowRows.length === 0 && freeRows.length === 0 ? (
               <div className="board-empty">
                 {stats.listings > 0 ? (
                   // The board isn't empty — this tab is. Say which, and offer
@@ -505,9 +687,15 @@ export function MarketingPage({
                   const bidUsd = entry.amount_cents / 100
                   const position = category === 'all' ? entry.rank : index + 1
                   const claimPrice = takePrice(bidUsd)
+                  // Keyed off the displayed position, so it reads correctly
+                  // both board-wide and inside a filtered category. Suppressed
+                  // on the last row — a marker with nothing beneath it marks
+                  // nothing.
+                  const milestone =
+                    position % 10 === 0 && index < rankedRows.length - 1 ? position : null
                   return (
+                    <Fragment key={entry.product_id}>
                     <article
-                      key={entry.product_id}
                       className={[
                         'listing-row',
                         yours ? 'is-yours' : undefined,
@@ -545,24 +733,59 @@ export function MarketingPage({
                         </button>
                       </div>
                     </article>
+                    {milestone ? <Milestone at={milestone} /> : null}
+                    </Fragment>
                   )
                 })}
 
-                {freeRows.length > 0 && rankedRows.length > 0 ? (
+                {overflowRows.length > 0 ? (
                   <div className="board-divider">
-                    <span>Also listed today</span>
-                    <small>Free listings — no bid yet. $1 moves one into a ranked slot.</small>
+                    <span>Paid · below the cut</span>
+                    <small>
+                      These bids are live but sit under their category&apos;s {slotsPerCategory}{' '}
+                      ranked slots. Raise one to move it up.
+                    </small>
                   </div>
                 ) : null}
 
-                {freeRows.length > 0 && rankedRows.length === 0 ? (
-                  <div className="board-divider">
-                    <span>Listed · not ranked yet</span>
-                    <small>
-                      These are free listings. #1 is empty until someone bids — ${takePrice(0)}{' '}
-                      takes it.
-                    </small>
-                  </div>
+                {overflowRows.map((entry) => {
+                  const yours = isYours(entry)
+                  const bidUsd = entry.amount_cents / 100
+                  const price = takePrice(bidUsd)
+                  return (
+                    <article
+                      key={entry.product_id}
+                      className={['listing-row', 'is-overflow', yours ? 'is-yours' : undefined]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <div className="listing-rank num is-unranked" aria-label="Below the ranked slots">
+                        —
+                      </div>
+                      <ListingBody
+                        entry={entry}
+                        yours={yours}
+                        onCategory={setCategory}
+                        onDetails={setDetails}
+                      />
+                      <div className="listing-side">
+                        <div className="listing-bid">
+                          <span className="num">${bidUsd}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="listing-claim"
+                          onClick={() => (yours ? void payFor(entry, price * 100) : takeSlot(price))}
+                        >
+                          {yours ? `Raise · $${price} ↗` : `Outrank for $${price} ↗`}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+
+                {freeRows.length > 0 ? (
+                  <ClaimSeam price={takePrice(0)} onClaim={() => takeSlot(takePrice(0))} />
                 ) : null}
 
                 {freeRows.map((entry) => {
@@ -589,11 +812,11 @@ export function MarketingPage({
                       />
                       <div className="listing-side">
                         <div className="listing-bid">
-                          <span className="free-badge">Free</span>
+                          <span className="free-price num">FREE</span>
                         </div>
                         <button
                           type="button"
-                          className="listing-claim"
+                          className="listing-claim is-quiet"
                           onClick={() =>
                             yours
                               ? void payFor(entry, takePrice(0) * 100)

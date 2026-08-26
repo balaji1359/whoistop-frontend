@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   // OG/Twitter titles aren't templated, so those keep the full branded form.
   const title = `Top ${label} Today`
   const ogTitle = `Top ${label} Today — WhoIsTop.lol`
-  const description = `Discover ${label} startups and tools competing for today's top positions on WhoIsTop.lol. Rankings are determined by verified bids and reset daily.`
+  const description = `Discover ${label} startups and tools competing for the top positions on WhoIsTop.lol. Rankings are determined by verified bids — a slot holds until somebody outbids it.`
 
   return {
     title,
@@ -66,12 +66,12 @@ export default async function CategoryPage({ params }: { params: Promise<Params>
 
       <h1>Top {label} Today</h1>
       <p className="category-intro">
-        Discover {label} startups and tools competing for today&apos;s top positions on WhoIsTop.lol.
-        Rankings are determined by verified bids and reset daily.
+        Discover {label} startups and tools competing for the top positions on WhoIsTop.lol.
+        Rankings are determined by verified bids — a slot holds until somebody outbids it.
       </p>
 
       {ranked.length === 0 && free.length === 0 ? (
-        <p className="category-empty">Nothing listed in {label} yet today — be the first.</p>
+        <p className="category-empty">Nothing listed in {label} yet — be the first.</p>
       ) : (
         <ol className="category-list">
           {ranked.map((e) => (

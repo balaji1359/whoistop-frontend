@@ -8,7 +8,7 @@ export const SITE_NAME = 'WhoIsTop'
 export const SITE_TAGLINE = "Who's on top today?"
 
 export const SITE_DESCRIPTION =
-  'Daily pay-to-rank leaderboard for startups, tools, and side projects. Bid higher to rank higher — real clicks, transparent ranking, resets every day.'
+  'Pay-to-rank leaderboard for startups, tools, and side projects. Bid higher to rank higher — real clicks, transparent ranking, and your slot holds until somebody outbids it.'
 
 export const SITE_KEYWORDS = [
   'startup leaderboard',
@@ -17,7 +17,7 @@ export const SITE_KEYWORDS = [
   'startup directory',
   'bid for ranking',
   'whoistop',
-  'daily leaderboard',
+  'startup rankings',
   'startup marketing',
   'get more clicks',
   'launch directory',
@@ -128,7 +128,7 @@ export function siteJsonLd() {
           '@type': 'Offer',
           price: '0',
           priceCurrency: 'USD',
-          description: 'Free to list. Paid bids rank higher on the daily board.',
+          description: 'Free to list. Paid bids rank higher, and hold until outbid.',
         },
       },
     ],

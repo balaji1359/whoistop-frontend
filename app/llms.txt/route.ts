@@ -14,9 +14,9 @@ export async function GET() {
   const lines = [
     '# WhoIsTop.lol',
     '',
-    '> A daily, pay-to-rank leaderboard for startups, apps, and websites. Anyone can list a',
-    '> project for free; the highest paid bid holds the top spot in its category. The board',
-    '> resets every day at 00:00 UTC.',
+    '> A pay-to-rank leaderboard for startups, apps, and websites. Anyone can list a project',
+    '> for free; the highest paid bid holds the top spot in its category. Rankings are',
+    '> standing, not daily: a paid slot holds until somebody outbids it.',
     '',
     '## How ranking works',
     '',
@@ -25,6 +25,9 @@ export async function GET() {
     '  drops but is not removed — nothing is refunded, since displacing a rank is the mechanic,',
     '  not a penalty.',
     '- Ranks are per category, not board-wide.',
+    '- A paid rank does not expire. It is only lost by being outbid.',
+    "- 'Today' and 'this week' rankings are rolling 24-hour and 7-day windows over the same",
+    '  board, showing which recently-placed bids are currently winning — not separate boards.',
     '',
     '## Pages',
     '',
@@ -36,7 +39,7 @@ export async function GET() {
   ]
 
   if (top.length > 0) {
-    lines.push("## Today's top listings", '')
+    lines.push("## Current top listings", '')
     for (const e of top) {
       const cat = categoryLabel(e.category) ?? 'Other'
       lines.push(`- #${e.rank} ${e.name} (${cat}, $${e.amount_cents / 100}) — /product/${e.product_id}`)

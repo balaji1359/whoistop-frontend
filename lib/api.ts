@@ -38,12 +38,32 @@ export type LeaderboardEntry = {
   logo_data?: string
   cta_text: string
   amount_cents: number
-  /** Resets with the board each day. */
+  /** Clicks since 00:00 UTC — the only number here that still resets daily. */
   clicks_today: number
   /** Lifetime clicks — what a visitor judging a listing actually wants. */
   clicks_total: number
   /** When the project was first listed (RFC 3339). */
   listed_at: string
+}
+
+/**
+ * One line of the board's activity feed — a move somebody paid to make.
+ * `name`/`domain` are the values recorded at the time of the event, not
+ * today's: the feed is history, so a renamed listing keeps the name it took
+ * the slot under.
+ */
+export type ActivityItem = {
+  product_id: string
+  name: string
+  domain: string
+  logo_url?: string
+  logo_data?: string
+  /** `entered` took a slot it didn't hold; `raised` paid more to move up. */
+  event_type: 'entered' | 'raised'
+  rank: number
+  amount_cents: number
+  /** RFC 3339. */
+  occurred_at: string
 }
 
 export type Board = {
@@ -56,15 +76,29 @@ export type Board = {
 
 export type BoardView = {
   board: Board
-  ends_in_seconds: number
-  /** Paid slots, best bid first. `slots_per_category` of them per category. */
+  /**
+   * Paid slots, best bid first. `slots_per_category` of them per category.
+   * A slot holds until somebody outbids it — nothing here expires on a clock,
+   * which is why there is no countdown in this payload.
+   */
   entries: LeaderboardEntry[]
   /**
-   * Today's free listings — added for free, no bid on this board yet. They
-   * carry `rank: 0` and `amount_cents: 0`; their displayed position is derived
-   * from where they sit below the paid slots in their category.
+   * Everything shown below the ranked slots: free listings (never paid for,
+   * `amount_cents: 0`) and paid listings that overflowed their category's
+   * slots (which keep their real `amount_cents`). Both carry `rank: 0`; their
+   * displayed position comes from where they sit in their category.
    */
   unranked: LeaderboardEntry[]
+  /** Standing bids placed in the last 24 hours, best first. */
+  daily_top: LeaderboardEntry[]
+  /** Standing bids placed in the last 7 days, best first. */
+  weekly_top: LeaderboardEntry[]
+  /**
+   * The most recent paid moves. Rides the board payload rather than a separate
+   * fetch so it updates over the same SSE stream — a confirmed bid is both a
+   * board change and a new feed line. `getActivity` pages further back.
+   */
+  activity: ActivityItem[]
   slots_per_category: number
 }
 
@@ -95,6 +129,10 @@ export type CheckoutSession = {
 
 export function getBoardToday(): Promise<BoardView> {
   return request<BoardView>('/boards/today')
+}
+
+export function getActivity(limit = 30, offset = 0): Promise<ActivityItem[]> {
+  return request<ActivityItem[]>(`/boards/activity?limit=${limit}&offset=${offset}`)
 }
 
 export function getProduct(id: string): Promise<Product> {

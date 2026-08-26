@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   // suffix — repeating "WhoIsTop.lol" here would double it in the tab title.
   const title = `${listing.name}${rankPart}`
   const ogTitle = `${listing.name}${rankPart} on WhoIsTop.lol`
-  const description = listing.tagline || `${listing.name} — a listing on WhoIsTop.lol, the daily pay-to-rank leaderboard for startups.`
+  const description = listing.tagline || `${listing.name} — a listing on WhoIsTop.lol, the pay-to-rank leaderboard for startups.`
 
   return {
     title,

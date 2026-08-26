@@ -3,26 +3,30 @@
 @import 'shadcn/tailwind.css';
 
 :root {
-  --bg: #f7f7f8;
+  /* Warm neutrals, not cool ones. The greys carry a little of the accent's
+     hue instead of sitting on the blue side of neutral, which is the whole
+     difference between reading as "editorial" and reading as "SaaS
+     dashboard" — the accent, the type and the spacing were already right. */
+  --bg: #faf8f5;
   --surface: #ffffff;
-  --z50: #fafafa;
-  --z100: #f4f4f5;
-  --z200: #e4e4e7;
-  --z300: #d4d4d8;
-  --z400: #a1a1aa;
-  --z500: #71717a;
-  --z600: #52525b;
-  --z700: #3f3f46;
-  --z800: #27272a;
-  --z900: #18181b;
+  --z50: #faf9f7;
+  --z100: #f5f2ee;
+  --z200: #e8e3db;
+  --z300: #d8d1c7;
+  --z400: #a8a096;
+  --z500: #7a726a;
+  --z600: #57514b;
+  --z700: #443f3a;
+  --z800: #292524;
+  --z900: #1c1917;
   --accent: #ef5a3c;
   --accent-hover: #dc4a2e;
-  --accent-soft: #fff1ed;
-  --accent-border: #ffd4c8;
+  --accent-soft: #fdf0ec;
+  --accent-border: #f7d3c8;
   --up: #16a34a;
   --down: #dc2626;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.06), 0 8px 24px rgb(0 0 0 / 0.06);
+  --shadow: 0 1px 2px rgb(60 40 25 / 0.05), 0 4px 16px rgb(60 40 25 / 0.05);
+  --shadow-md: 0 2px 8px rgb(60 40 25 / 0.07), 0 8px 24px rgb(60 40 25 / 0.07);
   --ring: 0 0 0 3px rgb(239 90 60 / 0.2);
   --r: 12px;
   --r-sm: 8px;
@@ -378,7 +382,7 @@ input:focus-visible { outline: none; }
   text-align: center;
 }
 
-.hero-reset {
+.hero-side {
   background: var(--surface);
   border: 1px solid var(--z200);
   border-radius: var(--r-lg);
@@ -387,39 +391,298 @@ input:focus-visible { outline: none; }
   display: flex;
   flex-direction: column;
 }
-.hero-reset .eyebrow { margin-bottom: 8px; }
-.clock {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-family: var(--mono);
-  font-size: 36px;
-  font-weight: 600;
-  letter-spacing: -.03em;
+.hero-side .eyebrow { margin-bottom: 8px; }
+.hold-line {
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+  line-height: 1.15;
   color: var(--z900);
 }
-.clock small {
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--z400);
-  text-transform: uppercase;
-  margin-right: 6px;
-}
-.reset-copy {
+.hold-copy {
   margin-top: 10px;
   color: var(--z500);
   font-size: 14px;
   line-height: 1.45;
 }
-.hero-reset .text-link {
+.hero-side .text-link {
   margin-top: auto;
   padding-top: 12px;
   color: var(--z600);
   font-size: 14px;
   font-weight: 600;
 }
-.hero-reset .text-link:hover { color: var(--z900); }
+.hero-side .text-link:hover { color: var(--z900); }
+
+/* A paid listing sitting under its category's slot cut: still paid, so it must
+   not read as one of the free rows it sits beside. */
+.listing-row.is-overflow { background: var(--z50); }
+.listing-row.is-overflow .listing-bid .num { color: var(--z600); }
+
+/* ── Milestone markers ──
+   A hairline the list is cut by, interrupted at the centre by the label. The
+   rule is accent-tinted rather than grey so the marker reads as part of the
+   ranking's own language (rank, price, money) instead of as another divider. */
+.milestone {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 26px 24px;
+}
+.milestone::before,
+.milestone::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--accent-border);
+}
+.milestone-pill {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 5px 16px;
+}
+
+/* ── The paid/free seam ──
+   Same construction as a milestone, but the label is the button: at exactly
+   the point where the row below is holding a rank for nothing, the cheapest
+   thing on the page is the thing you can click. */
+.claim-seam {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 30px 24px 26px;
+}
+.claim-seam::before,
+.claim-seam::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--accent-border);
+}
+.claim-seam-pill {
+  flex: none;
+  font-size: 14px;
+  font-weight: 650;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 9px 20px;
+  box-shadow: var(--shadow);
+  transition: background .15s var(--ease), transform .15s var(--ease);
+}
+.claim-seam-pill:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+/* FREE occupies the price column rather than sitting beside it: same slot,
+   same alignment, different content — so the eye reads one price column all
+   the way down instead of two competing treatments. */
+.free-price {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--accent);
+}
+
+/* A row that already has the seam's call to action above it doesn't need to
+   shout the same thing again. */
+.listing-claim.is-quiet {
+  background: transparent;
+  border: 1px solid var(--z200);
+  color: var(--z600);
+}
+.listing-claim.is-quiet:hover {
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* ── Activity feed ──
+   A card, where the ranking strips above are bare sections: different
+   substrate for a different class of information — a log, not a ranking. */
+.activity-card {
+  /* Matches the content box of .top-strips above it — shell width minus the
+     shell's own gutters — so the card's edges line up with the strips rather
+     than with the page. */
+  max-width: calc(var(--shell) - var(--shell-pad) * 2);
+  margin: 16px auto 0;
+  padding: 20px 22px;
+  background: var(--surface);
+  border: 1px solid var(--z200);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}
+.activity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pill-btn {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--z600);
+  background: var(--surface);
+  border: 1px solid var(--z200);
+  border-radius: 999px;
+  padding: 7px 16px;
+  transition: border-color .15s var(--ease), color .15s var(--ease);
+}
+.pill-btn:hover:not(:disabled) { border-color: var(--z300); color: var(--z900); }
+.pill-btn:disabled { opacity: .6; cursor: default; }
+.activity-row {
+  list-style: none;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.activity-row.is-expanded {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+/* Fill, no border: these are records, not controls. */
+.activity-chip {
+  flex: 1 1 0;
+  min-width: 210px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--z100);
+  border-radius: var(--r);
+}
+.activity-row.is-expanded .activity-chip { flex: 0 1 calc(20% - 8px); }
+.activity-chip .mark.sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 14px;
+}
+.activity-body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.activity-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--z900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-line {
+  font-size: 13px;
+  color: var(--z600);
+}
+.activity-line span { color: var(--z400); margin: 0 2px; }
+.activity-when {
+  font-size: 12px;
+  color: var(--z400);
+}
+
+/* ── Today's / this week's top strips ──
+   Windows over the same standing board, so they read as a summary band above
+   it rather than as separate boards: one line each, scrolling sideways instead
+   of wrapping into something that competes with the ranking below. */
+.top-strips {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 12px var(--shell-pad) 0;
+  display: grid;
+  gap: 14px;
+}
+.strip-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.strip-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: var(--z900);
+}
+.strip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.strip-hint {
+  font-size: 12px;
+  color: var(--z400);
+}
+.strip-row {
+  list-style: none;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.strip-item {
+  flex: 1 1 0;
+  min-width: 240px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--z200);
+  border-radius: var(--r);
+}
+.strip-item.is-lead {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+.strip-rank {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--z400);
+  flex: none;
+}
+.strip-item.is-lead .strip-rank { color: var(--accent); }
+.strip-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--z900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.strip-name:hover { color: var(--accent); }
+.strip-item {
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.strip-item:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow);
+}
+.meta-dot { color: var(--accent); }
+.strip-amount {
+  flex: none;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--z700);
+}
+.strip-item.is-lead .strip-amount { color: var(--accent); }
 
 /* ── Board shell ── */
 .board {
@@ -673,9 +936,9 @@ input:focus-visible { outline: none; }
   position: relative;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) minmax(88px, auto);
-  gap: 14px;
+  gap: 18px;
   align-items: center;
-  padding: 18px 20px;
+  padding: 24px 24px;
   border-bottom: 1px solid var(--z100);
   transition: background .15s var(--ease);
 }
@@ -691,7 +954,7 @@ input:focus-visible { outline: none; }
 }
 .listing-row.is-top:hover,
 .listing-row.is-top:focus-within { background: #ffefe8; }
-.listing-row.is-yours:not(.is-top):not(:hover):not(:focus-within) { background: #fafafa; }
+.listing-row.is-yours:not(.is-top):not(:hover):not(:focus-within) { background: var(--z50); }
 
 .listing-rank {
   width: 36px;
@@ -901,18 +1164,6 @@ input:focus-visible { outline: none; }
   font-size: 13px;
   color: var(--z400);
 }
-.free-badge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--z500);
-  background: var(--z100);
-  border: 1px solid var(--z200);
-  padding: 2px 8px;
-  border-radius: 999px;
-}
 
 @media (max-width: 768px) {
   .listing-row {
@@ -969,37 +1220,6 @@ input:focus-visible { outline: none; }
   padding: 8px;
   border-top: 1px solid var(--z100);
 }
-
-/* Activity */
-.activity-col .eyebrow { display: block; padding: 2px 4px 4px; }
-.activity-list {
-  list-style: none;
-  display: grid;
-  gap: 0;
-}
-.activity-list li {
-  display: flex;
-  gap: 10px;
-  padding: 12px 4px;
-  border-bottom: 1px solid var(--z100);
-}
-.activity-list li:last-child { border-bottom: 0; }
-.activity-dot {
-  width: 8px;
-  height: 8px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex: none;
-}
-.activity-list p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--z700);
-}
-.activity-list strong { color: var(--z900); font-weight: 600; }
-.activity-list small { display: block; margin-top: 3px; font-size: 12px; color: var(--z400); }
 
 /* Value strip */
 .value-strip {

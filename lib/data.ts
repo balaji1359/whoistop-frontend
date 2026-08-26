@@ -49,16 +49,16 @@ export const DEFAULT_CATEGORY = 'other'
 
 export const graffiti = {
   heroTitle: "Who's on top today?",
-  heroSub: 'A daily leaderboard for startups. More eyes. More clicks. More growth.',
+  heroSub: 'A live leaderboard for startups. More eyes. More clicks. More growth.',
   entryHint:
     'Websites, X and Instagram profiles, App Store and Google Play links. Listing is free — $1 puts you in a ranked slot.',
-  resetNote: 'Resets daily at 00:00 UTC',
+  holdNote: 'Your slot holds until somebody outbids it. No nightly reset, no re-buying the spot you already paid for.',
 }
 
 export const arena = graffiti
 
 export const valueStrip = [
-  { title: 'Daily exposure', body: 'Thousands of founders check the board every day.' },
+  { title: 'Your rank keeps', body: 'Pay once. The slot is yours until somebody outbids you.' },
   { title: 'Real clicks', body: 'Every rank shows verified click counts — no vanity metrics.' },
   { title: 'Fair & transparent', body: 'Rank is the bid. No algorithm, no favorites.' },
   { title: "You're in control", body: 'Raise your bid anytime. Drop off when you want.' },
