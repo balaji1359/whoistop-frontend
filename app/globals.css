@@ -55,8 +55,8 @@ a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
 input { font: inherit; }
 button:focus-visible,
-a:focus-visible,
-input:focus-visible { outline: none; box-shadow: var(--ring); }
+a:focus-visible { outline: none; box-shadow: var(--ring); }
+input:focus-visible { outline: none; }
 
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--z500); }
@@ -371,7 +371,7 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
   margin: 0 auto;
   padding: 20px var(--shell-pad) 28px;
   display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -458,14 +458,9 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
 .cats-quiet button { color: var(--z500); }
 .cats-quiet .cat-floor { color: var(--z300); }
 .cats-group {
-  padding: 14px 12px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--z400);
   border-top: 1px solid var(--z100);
-  margin-top: 6px;
+  margin-top: 8px;
+  padding-top: 4px;
 }
 .cats-toggle {
   display: flex;
@@ -473,14 +468,13 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  margin-top: 8px;
   padding: 11px 12px;
-  border-top: 1px solid var(--z100);
   font-size: 13px;
   font-weight: 600;
   color: var(--z500);
+  border-radius: var(--r-sm);
 }
-.cats-toggle:hover { color: var(--z900); }
+.cats-toggle:hover { color: var(--z900); background: var(--z100); }
 
 /* Main column */
 .main-col { min-width: 0; }
@@ -504,23 +498,47 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
   align-items: center;
   gap: 10px;
   height: 48px;
-  padding: 0 16px;
+  padding: 0 14px;
   background: var(--z50);
   border: 1px solid var(--z200);
   border-radius: 10px;
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease), background .15s var(--ease);
 }
+.field:hover { border-color: var(--z300); }
 .field:focus-within {
   border-color: var(--accent);
   background: #fff;
   box-shadow: var(--ring);
 }
+.field .muted {
+  flex: none;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--z400);
+  user-select: none;
+}
 .field input {
   flex: 1;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
   outline: none;
-  font-size: 16px;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: 15px;
+  line-height: 48px;
   color: var(--z900);
+  caret-color: var(--z900);
+}
+.field input:focus,
+.field input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 .field input::placeholder { color: var(--z400); }
 .entry-hint {
@@ -532,6 +550,33 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
 }
 .entry-hint strong { color: var(--z700); font-weight: 600; }
 
+/* Board summary — proof the board is alive before any bids land */
+.board-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+  margin: 4px 2px 14px;
+  padding: 10px 14px;
+  background: var(--z50);
+  border: 1px solid var(--z200);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--z500);
+}
+.board-stats > span {
+  white-space: nowrap;
+}
+.board-stats-sep {
+  color: var(--z300);
+  user-select: none;
+}
+.board-stats b {
+  font-weight: 700;
+  color: var(--z900);
+  margin-right: 4px;
+}
+
 /* Table */
 .board-panel {
   background: var(--surface);
@@ -540,6 +585,28 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+.board-empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 56px 28px;
+  min-height: 180px;
+}
+.board-empty strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--z900);
+  letter-spacing: -.01em;
+}
+.board-empty p {
+  margin: 0;
+  max-width: 36ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--z500);
+}
+.board-empty .btn { margin-top: 10px; }
 .board-table {
   width: 100%;
   border-collapse: collapse;
@@ -566,6 +633,46 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
 .board-table tbody tr:last-child td { border-bottom: 0; }
 .board-table tbody tr:hover { background: var(--z50); }
 .board-table tbody tr.row-yours { background: #f8fafc; }
+
+/* Free listings: present and clickable, visibly not competing for rank */
+.board-divider-row:hover { background: transparent; }
+.board-divider-row td {
+  padding: 0;
+  border-bottom: 1px solid var(--z200);
+}
+.board-divider {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 12px 18px;
+  background: var(--z50);
+}
+.board-divider span {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--z500);
+}
+.board-divider small {
+  font-size: 13px;
+  color: var(--z400);
+}
+.board-table tbody tr.row-free .rank-cell,
+.board-table tbody tr.row-free .proj small { color: var(--z400); }
+.free-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--z500);
+  background: var(--z100);
+  border: 1px solid var(--z200);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
 .rank-cell {
   font-family: var(--mono);
   font-weight: 600;
@@ -747,6 +854,30 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
 }
 .bid-field input:hover { border-color: var(--z300); }
 .bid-field input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+  outline: none;
+}
+.category-select {
+  appearance: none;
+  width: 100%;
+  border: 1px solid var(--z200);
+  border-radius: var(--r-sm);
+  padding: 11px 34px 11px 12px;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--z900);
+  background-color: #fff;
+  /* caret drawn in CSS so it inherits the palette and costs no asset request */
+  background-image: linear-gradient(45deg, transparent 50%, var(--z500) 50%),
+    linear-gradient(135deg, var(--z500) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
+}
+.category-select:hover { border-color: var(--z300); }
+.category-select:focus {
   border-color: var(--accent);
   box-shadow: var(--ring);
   outline: none;
@@ -960,14 +1091,13 @@ input:focus-visible { outline: none; box-shadow: var(--ring); }
 }
 .dash-list li:last-child { border-bottom: 0; }
 
-/* three columns get too tight for the table below this, so drop the activity rail */
+/* activity rail removed — keep board two columns until it returns */
 @media (max-width: 1400px) {
-  .board { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 280px); }
+  .board { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); }
 }
 
 @media (max-width: 1240px) {
   .board { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); }
-  .activity-col { display: none; }
 }
 
 @media (max-width: 1100px) {

@@ -1,7 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { categories, rowActionLabel, takeLeaderLabel, takePrice } from '@/lib/data'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  categoryLabel,
+  detectCategoryFromUrl,
+  rowActionLabel,
+  selectableCategories,
+  takeLeaderLabel,
+  takePrice,
+} from '@/lib/data'
 import { formatUsd } from '@/lib/format'
 import { ApiError, createBidIntent, createProduct, type LeaderboardEntry } from '@/lib/api'
 import { fetchLinkPreview, type LinkPreview } from '@/lib/link-preview'
@@ -12,11 +19,50 @@ export type BidTarget = {
   mode: 'take' | 'raise'
 }
 
+function titleCase(value: string): string {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
+ * Last-resort display name when the link preview gives us nothing usable.
+ *
+ * Taking the first hostname label is only right for a project's own domain.
+ * For the link types the hint text promises to support it produces garbage —
+ * every App Store listing would be called "Apps" and every Play listing
+ * "Play" — so those carry their name in the path instead.
+ */
 function deriveNameFromUrl(url: string): string {
   try {
-    const hostname = new URL(url).hostname.replace(/^www\./, '')
-    const base = hostname.split('.')[0] || hostname
-    return base.charAt(0).toUpperCase() + base.slice(1)
+    const parsed = new URL(url)
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase()
+    const segments = parsed.pathname.split('/').filter(Boolean)
+
+    // apps.apple.com/us/app/my-app/id1234567890
+    if (host.endsWith('apple.com')) {
+      const appIndex = segments.indexOf('app')
+      const slug = appIndex >= 0 ? segments[appIndex + 1] : undefined
+      if (slug && !/^id\d+$/.test(slug)) return titleCase(slug)
+    }
+
+    // play.google.com/store/apps/details?id=com.example.myapp
+    if (host.endsWith('play.google.com')) {
+      const pkg = parsed.searchParams.get('id')
+      const last = pkg?.split('.').filter(Boolean).pop()
+      if (last) return titleCase(last)
+    }
+
+    // A profile is its handle, not the platform it lives on.
+    if (/(^|\.)(x|twitter|instagram|linkedin|threads|tiktok|github)\.com$/.test(host)) {
+      const handle = segments[0]
+      if (handle) return `@${handle.replace(/^@/, '')}`
+    }
+
+    const base = host.split('.')[0] || host
+    return titleCase(base)
   } catch {
     return 'New project'
   }
@@ -112,7 +158,7 @@ function LinkPreviewBlock({
         {previewStatus === 'idle' ? (
           <div className="claim-preview-empty">
             <strong>Your listing preview</strong>
-            <p>Paste the link that should appear on the board after you pay.</p>
+            <p>Title, image, and description show up here once the URL looks complete.</p>
           </div>
         ) : null}
 
@@ -124,6 +170,74 @@ function LinkPreviewBlock({
         ) : null}
       </div>
     </>
+  )
+}
+
+/**
+ * The category the listing will be filed under.
+ *
+ * It is a required, explicit choice rather than a silent auto-assignment: the
+ * board ranks per category, so a listing filed under the wrong tab competes in
+ * the wrong race, and one filed under none is unreachable from every tab. The
+ * guess only preselects — and stops preselecting the moment the person picks
+ * something themselves.
+ */
+function useCategoryChoice(url: string, preview: LinkPreview | null) {
+  const [category, setCategory] = useState('')
+  const [touched, setTouched] = useState(false)
+
+  const hint = `${preview?.title ?? ''} ${preview?.description ?? ''} ${preview?.siteName ?? ''}`
+  const detected = useMemo(() => detectCategoryFromUrl(url, hint), [url, hint])
+
+  useEffect(() => {
+    if (touched) return
+    setCategory(detected ?? '')
+  }, [detected, touched])
+
+  const choose = useCallback((value: string) => {
+    setTouched(true)
+    setCategory(value)
+  }, [])
+
+  const reset = useCallback(() => {
+    setTouched(false)
+    setCategory('')
+  }, [])
+
+  return { category, choose, reset, detected }
+}
+
+function CategorySelect({
+  value,
+  onChange,
+  detected,
+}: {
+  value: string
+  onChange: (value: string) => void
+  detected: string | null
+}) {
+  return (
+    <label className="bid-field">
+      Category
+      <select
+        className="category-select"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+      >
+        <option value="">Choose a category…</option>
+        {selectableCategories.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+      <span className="claim-url-hint">
+        {detected && detected === value
+          ? 'Detected from your link — change it if it’s wrong.'
+          : 'This decides which board you compete on.'}
+      </span>
+    </label>
   )
 }
 
@@ -175,24 +289,26 @@ export function ConnectModal({
   onClose,
   onListed,
   initialUrl = '',
-  detectedCategory,
 }: {
   open: boolean
   onClose: () => void
   onListed?: (entry: LeaderboardEntry) => void
   initialUrl?: string
-  detectedCategory?: string | null
 }) {
   const [domain, setDomain] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { preview, previewStatus, previewError } = useLinkPreview(domain, open)
+  // Detected from the URL as edited here, not the one typed on the page —
+  // editing the link in this modal used to leave the stale guess attached.
+  const { category, choose, reset, detected } = useCategoryChoice(domain, preview)
 
   useEffect(() => {
     if (!open) return
     setDomain(initialUrl)
     setError(null)
-  }, [open, initialUrl])
+    reset()
+  }, [open, initialUrl, reset])
 
   useEffect(() => {
     if (!open) return
@@ -212,6 +328,10 @@ export function ConnectModal({
       setError('Enter your project URL.')
       return
     }
+    if (!category) {
+      setError('Pick a category — it decides which board you’re listed on.')
+      return
+    }
 
     const resolvedName =
       preview?.title?.trim() || preview?.siteName?.trim() || deriveNameFromUrl(url)
@@ -224,7 +344,7 @@ export function ConnectModal({
         name: resolvedName,
         domain: url,
         tagline,
-        category: detectedCategory ?? undefined,
+        category,
         logo_url: logoUrl,
       })
       onListed?.({
@@ -258,7 +378,7 @@ export function ConnectModal({
       >
         <div className="modal-claim-head">
           <h3 id="claim-title">Add your project</h3>
-          <p>Listing is free. Next you’ll bid to place it on the board.</p>
+          <p>Free to list — you’ll appear on today’s board straight away. Bid to take a ranked slot.</p>
         </div>
 
         <div className="modal-claim-body">
@@ -270,13 +390,9 @@ export function ConnectModal({
             previewError={previewError}
             autoFocus
           />
+          <CategorySelect value={category} onChange={choose} detected={detected} />
         </div>
 
-        {detectedCategory ? (
-          <p className="modal-meta">
-            Category detected: <strong>{categories.find((c) => c.id === detectedCategory)?.label}</strong>
-          </p>
-        ) : null}
         {error ? (
           <p className="modal-meta modal-error" role="alert">
             {error}
@@ -285,7 +401,7 @@ export function ConnectModal({
 
         <div className="modal-actions">
           <button type="button" className="btn btn-primary" onClick={submit} disabled={submitting}>
-            {submitting ? 'Adding…' : 'Continue'}
+            {submitting ? 'Adding…' : 'Add for free'}
           </button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
@@ -310,13 +426,15 @@ export function BidModal({
   const mode = target?.mode ?? 'take'
   const needsUrl = mode === 'take'
   const { preview, previewStatus, previewError } = useLinkPreview(domain, Boolean(listing) && needsUrl)
+  const { category, choose, reset, detected } = useCategoryChoice(domain, preview)
   const price = listing ? takePrice(listing.amount_cents / 100) : 0
 
   useEffect(() => {
     setError(null)
     setDomain('')
     setSubmitting(false)
-  }, [target])
+    reset()
+  }, [target, reset])
 
   useEffect(() => {
     if (!listing) return
@@ -336,7 +454,7 @@ export function BidModal({
         ? `Defend #1 · ${formatUsd(price)}`
         : listing.rank > 0
           ? `Raise bid · ${formatUsd(price)}`
-          : `Place on the board · ${formatUsd(price)}`
+          : `Take a ranked slot · ${formatUsd(price)}`
       : listing.rank === 1
         ? takeLeaderLabel(bidUsd)
         : rowActionLabel(listing.rank, bidUsd, false)
@@ -357,12 +475,18 @@ export function BidModal({
           setSubmitting(false)
           return
         }
+        if (!category) {
+          setError('Pick a category — it decides which board you’re ranked on.')
+          setSubmitting(false)
+          return
+        }
         const name = preview?.title?.trim() || preview?.siteName?.trim() || deriveNameFromUrl(url)
         const tagline = (preview?.description || 'Listed on WhoIsTop').slice(0, 160)
         const product = await createProduct({
           name,
           domain: url,
           tagline,
+          category,
           logo_url: preview?.image || preview?.favicon || undefined,
         })
         productId = product.id
@@ -401,10 +525,17 @@ export function BidModal({
           <h3 id="bid-title">{title}</h3>
           <p>
             {mode === 'raise' ? (
-              <>
-                Raise <em>{listing.name}</em> to {formatUsd(price)}
-                {listing.rank > 0 ? <> (currently #{listing.rank} at {formatUsd(bidUsd)})</> : null}.
-              </>
+              listing.rank > 0 ? (
+                <>
+                  Raise <em>{listing.name}</em> to {formatUsd(price)} (currently #{listing.rank} at{' '}
+                  {formatUsd(bidUsd)}).
+                </>
+              ) : (
+                <>
+                  <em>{listing.name}</em> is listed for free. Pay {formatUsd(price)} to move it into a
+                  ranked slot in its category.
+                </>
+              )
             ) : (
               <>
                 <em>{listing.name}</em> holds #{listing.rank || '—'} at {formatUsd(bidUsd)}. Pay{' '}
@@ -424,6 +555,7 @@ export function BidModal({
               previewError={previewError}
               autoFocus
             />
+            <CategorySelect value={category} onChange={choose} detected={detected} />
           </div>
         ) : null}
 
@@ -440,6 +572,80 @@ export function BidModal({
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Confirms a free listing actually went live.
+ *
+ * This used to be a redirect straight into the bid modal, which made "Add for
+ * free" read as a bait-and-switch: you added for free, and the next thing you
+ * saw was a payment dialog. The listing is on the board either way — bidding
+ * is an offer here, not a toll gate.
+ */
+export function ListedModal({
+  entry,
+  rankedAt,
+  onClose,
+  onBid,
+}: {
+  entry: LeaderboardEntry | null
+  /** Set when the domain was already on the board in a paid slot. */
+  rankedAt: number | null
+  onClose: () => void
+  onBid: (entry: LeaderboardEntry) => void
+}) {
+  useEffect(() => {
+    if (!entry) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [entry, onClose])
+
+  if (!entry) return null
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="listed-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 id="listed-title">{rankedAt ? 'Already on the board' : 'You’re on the board'}</h3>
+        {rankedAt ? (
+          <p>
+            <em>{displayHost(entry.domain)}</em> is already listed and holds a paid slot at #
+            {rankedAt}. Outbid it to take that slot for yourself.
+          </p>
+        ) : (
+          <>
+            <p>
+              <em>{displayHost(entry.domain)}</em> is listed for free and live on today’s board
+              right now — in <strong>{categoryLabel(entry.category) ?? 'Other'}</strong>, under the
+              ranked slots. Nothing to pay.
+            </p>
+            <p className="modal-meta">
+              {formatUsd(takePrice(0))} moves it into a ranked slot in that category, above every
+              free listing.
+            </p>
+          </>
+        )}
+        <div className="modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            Done
+          </button>
+          {rankedAt ? null : (
+            <button type="button" className="btn btn-primary" onClick={() => onBid(entry)}>
+              Take a ranked slot · {formatUsd(takePrice(0))}
+            </button>
+          )}
         </div>
       </div>
     </div>

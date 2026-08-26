@@ -44,7 +44,15 @@ export type Board = {
 export type BoardView = {
   board: Board
   ends_in_seconds: number
+  /** Paid slots, best bid first. `slots_per_category` of them per category. */
   entries: LeaderboardEntry[]
+  /**
+   * Today's free listings — added for free, no bid on this board yet. They
+   * carry `rank: 0` and `amount_cents: 0`; their displayed position is derived
+   * from where they sit below the paid slots in their category.
+   */
+  unranked: LeaderboardEntry[]
+  slots_per_category: number
 }
 
 export type CreateProductInput = {
