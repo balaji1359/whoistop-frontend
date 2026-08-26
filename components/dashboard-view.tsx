@@ -1,47 +1,45 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 import { SiteHeader } from '@/components/header'
-import { ConnectModal } from '@/components/modals'
-import { listings, viewerListingDomain } from '@/lib/data'
-import { formatUsd } from '@/lib/format'
 import { useWallet } from '@/components/wallet'
 
 export function DashboardView() {
-  const session = useWallet()
-  const [claimOpen, setClaimOpen] = useState(false)
-  const yours = listings.find((item) => item.domain === viewerListingDomain) ?? listings[3]
+  const wallet = useWallet()
 
   return (
     <div className="dash-shell">
-      <SiteHeader onClaim={() => setClaimOpen(true)} />
+      <SiteHeader onClaim={() => {}} />
       <div className="dash">
         <header>
-          <h1>{session.claimed ? session.domain : 'Your account'}</h1>
-          <p className="muted">Projects, bids, and balance — linked from the avatar menu.</p>
+          <h1>Your projects</h1>
+          <p className="muted">
+            Projects you&apos;ve paid to rank from this browser. A sign-in link was emailed to you after each
+            payment — use it to manage a listing from any device.
+          </p>
         </header>
-        <div className="dash-grid">
+        {wallet.paidDomains.length > 0 ? (
           <section className="dash-panel">
-            <h2>Your spot</h2>
+            <h2>Paid from this browser</h2>
             <ul className="dash-list">
-              <li>
-                <span>{yours.name} · #{yours.rank}</span>
-                <b className="num">{formatUsd(yours.bid)}</b>
-              </li>
+              {wallet.paidDomains.map((domain) => (
+                <li key={domain}>
+                  <span>{domain}</span>
+                </li>
+              ))}
             </ul>
           </section>
+        ) : (
           <section className="dash-panel">
-            <h2>Balance</h2>
-            <p className="muted" style={{ marginBottom: 12 }}>Shown at bid confirmation on the board.</p>
-            <button type="button" className="btn btn-secondary" onClick={() => setClaimOpen(true)}>Add funds</button>
+            <p className="muted">Nothing yet — bid on a listing from the board and it&apos;ll show up here.</p>
           </section>
-        </div>
+        )}
         <p style={{ marginTop: 24 }}>
-          <Link className="btn btn-ghost" href="/">← Back to leaderboard</Link>
+          <Link className="btn btn-ghost" href="/">
+            ← Back to leaderboard
+          </Link>
         </p>
       </div>
-      <ConnectModal open={claimOpen} onClose={() => setClaimOpen(false)} />
     </div>
   )
 }
