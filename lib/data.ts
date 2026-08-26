@@ -48,11 +48,13 @@ export const selectableCategories: Category[] = categories.filter((c) => c.id !=
 export const DEFAULT_CATEGORY = 'other'
 
 export const graffiti = {
-  heroTitle: "Who's on top today?",
-  heroSub: 'A live leaderboard for startups. More eyes. More clicks. More growth.',
-  entryHint:
-    'Websites, X and Instagram profiles, App Store and Google Play links. Listing is free — $1 puts you in a ranked slot.',
-  holdNote: 'Your slot holds until somebody outbids it. No nightly reset, no re-buying the spot you already paid for.',
+  heroHook: 'Think you belong at the top?',
+  heroPitch:
+    'Add your project. Place a bid. Climb the leaderboard. Every position is up for grabs.',
+  entryHint: 'Websites, startups, apps, X & Instagram profiles welcome.',
+  entryHintFree: 'List for free',
+  holdNote:
+    'Your slot holds until somebody outbids it. No nightly reset, no re-buying the spot you already paid for.',
 }
 
 export const arena = graffiti

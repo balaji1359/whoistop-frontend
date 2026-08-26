@@ -10,6 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: BASE_URL, changeFrequency: 'hourly', priority: 1 },
+    { url: `${BASE_URL}/contact`, changeFrequency: 'monthly', priority: 0.3 },
   ]
 
   const categoryRoutes: MetadataRoute.Sitemap = selectableCategories.map((c) => ({

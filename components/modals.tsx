@@ -354,6 +354,7 @@ export function ConnectModal({
   onClose,
   onListed,
   initialUrl = '',
+  initialCategory = '',
   pendingBidCents = null,
 }: {
   open: boolean
@@ -361,6 +362,8 @@ export function ConnectModal({
   /** Called after a free add. Pay flows redirect to Stripe themselves. */
   onListed?: (entry: LeaderboardEntry) => void
   initialUrl?: string
+  /** Preselect from the hero form when the user already picked a category. */
+  initialCategory?: string
   /** Non-null when this add is the first half of buying a ranked slot. */
   pendingBidCents?: number | null
 }) {
@@ -379,10 +382,11 @@ export function ConnectModal({
     setDomain(initialUrl)
     setError(null)
     reset()
+    if (initialCategory) choose(initialCategory)
     if (pendingBidCents !== null) {
       setBidUsd(Math.max(minBidUsd, Math.round(pendingBidCents / 100)))
     }
-  }, [open, initialUrl, reset, pendingBidCents, minBidUsd])
+  }, [open, initialUrl, initialCategory, choose, reset, pendingBidCents, minBidUsd])
 
   useEffect(() => {
     if (!open) return

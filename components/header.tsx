@@ -8,7 +8,7 @@ const links = [
   { href: '/', label: 'Leaderboard' },
   { href: '/#categories', label: 'Categories' },
   { href: '/#how', label: 'How it works' },
-  { href: '/#how', label: 'About' },
+  { href: '/contact', label: 'Contact' },
 ]
 
 export function SiteHeader({ onClaim }: { onClaim: () => void }) {
@@ -28,8 +28,18 @@ export function SiteHeader({ onClaim }: { onClaim: () => void }) {
             <Link
               key={link.label}
               href={link.href}
-              className={link.label === 'Leaderboard' && pathname === '/' ? 'active' : undefined}
-              aria-current={link.label === 'Leaderboard' && pathname === '/' ? 'page' : undefined}
+              className={
+                (link.label === 'Leaderboard' && pathname === '/') ||
+                (link.label === 'Contact' && pathname === '/contact')
+                  ? 'active'
+                  : undefined
+              }
+              aria-current={
+                (link.label === 'Leaderboard' && pathname === '/') ||
+                (link.label === 'Contact' && pathname === '/contact')
+                  ? 'page'
+                  : undefined
+              }
               onClick={() => setOpen(false)}
             >
               {link.label}

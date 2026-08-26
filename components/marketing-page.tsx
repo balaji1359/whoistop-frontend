@@ -1,7 +1,6 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SiteHeader } from '@/components/header'
 import {
@@ -18,6 +17,7 @@ import {
   detectCategoryFromUrl,
   graffiti,
   rowActionLabel,
+  selectableCategories,
   takePrice,
   valueStrip,
   type MarketingVariant,
@@ -133,19 +133,60 @@ function ListingBody({
 }
 
 /**
- * The live pulse of the board, from the rank history the backend already
- * keeps. Only paid moves appear — a listing pushed down by somebody else's bid
- * is not something anyone did, and padding the feed with passive movement
- * would make a quiet board look busy.
+ * Drop strips that only repeat what's already the #1 row in the main list.
+ * On a quiet board one paid listing would otherwise show four times.
  */
-function ActivityFeed({ items }: { items: ActivityItem[] }) {
+function filterRedundantStrip(entries: LeaderboardEntry[], leader?: LeaderboardEntry) {
+  if (!leader || entries.length === 0) return entries
+  if (entries.length === 1 && entries[0].product_id === leader.product_id && entries[0].rank === 1) {
+    return []
+  }
+  return entries
+}
+
+function filterRedundantActivity(items: ActivityItem[], leader?: LeaderboardEntry) {
+  if (!leader || items.length === 0) return items
+  if (items.length === 1 && items[0].product_id === leader.product_id && items[0].rank === 1) {
+    return []
+  }
+  return items
+}
+
+function sameStrip(a: LeaderboardEntry[], b: LeaderboardEntry[]) {
+  return (
+    a.length === b.length &&
+    a.length > 0 &&
+    a.every((entry, index) => entry.product_id === b[index]?.product_id)
+  )
+}
+
+/**
+ * Compact recency + activity band — lives at the bottom of the board panel,
+ * not between hero and list. Hidden when it would only restate the #1 row.
+ */
+function BoardPulse({
+  daily,
+  weekly,
+  activity,
+  leader,
+}: {
+  daily: LeaderboardEntry[]
+  weekly: LeaderboardEntry[]
+  activity: ActivityItem[]
+  leader?: LeaderboardEntry
+}) {
   const [expanded, setExpanded] = useState(false)
   const [extra, setExtra] = useState<ActivityItem[] | null>(null)
   const [loading, setLoading] = useState(false)
 
-  if (items.length === 0) return null
+  const dailyShown = filterRedundantStrip(daily, leader)
+  let weeklyShown = filterRedundantStrip(weekly, leader)
+  if (sameStrip(dailyShown, weeklyShown)) weeklyShown = []
+  const activityShown = filterRedundantActivity(activity, leader)
 
-  const shown = expanded && extra ? extra : items
+  if (dailyShown.length === 0 && weeklyShown.length === 0 && activityShown.length === 0) return null
+
+  const shown = expanded && extra ? extra : activityShown
 
   async function showMore() {
     if (extra) {
@@ -157,53 +198,91 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
       setExtra(await getActivity(30))
       setExpanded(true)
     } catch {
-      // Leave the inline feed as-is; it is already the most recent slice.
+      // Keep the inline slice.
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <section className="activity-card" aria-label="Latest activity">
-      <div className="activity-head">
-        <h2 className="strip-title">
-          <span className="strip-dot" aria-hidden="true" />
-          Latest activity
-        </h2>
-        {!expanded ? (
-          <button type="button" className="pill-btn" onClick={showMore} disabled={loading}>
-            {loading ? 'Loading…' : 'Show more'}
-          </button>
-        ) : (
-          <button type="button" className="pill-btn" onClick={() => setExpanded(false)}>
-            Show less
-          </button>
-        )}
-      </div>
-      <ol className={expanded ? 'activity-row is-expanded' : 'activity-row'}>
-        {shown.map((item) => (
-          <li key={`${item.product_id}-${item.occurred_at}`} className="activity-chip">
+    <div className="board-pulse" aria-label="Board activity">
+      {(dailyShown.length > 0 || weeklyShown.length > 0) && (
+        <div className="pulse-strips">
+          {dailyShown.length > 0 ? <PulseStrip title="Today's top" entries={dailyShown} /> : null}
+          {weeklyShown.length > 0 ? (
+            <PulseStrip title="This week's top" entries={weeklyShown} />
+          ) : null}
+        </div>
+      )}
+      {activityShown.length > 0 ? (
+        <div className="pulse-activity">
+          <div className="pulse-activity-head">
+            <span className="pulse-label">Latest activity</span>
+            {!expanded ? (
+              <button type="button" className="pulse-more" onClick={showMore} disabled={loading}>
+                {loading ? 'Loading…' : 'Show more'}
+              </button>
+            ) : (
+              <button type="button" className="pulse-more" onClick={() => setExpanded(false)}>
+                Show less
+              </button>
+            )}
+          </div>
+          <ol className={expanded ? 'pulse-row is-expanded' : 'pulse-row'}>
+            {shown.map((item) => (
+              <li key={`${item.product_id}-${item.occurred_at}`} className="pulse-chip">
+                <Mark
+                  letter={item.name[0]?.toUpperCase() ?? '?'}
+                  domain={item.domain}
+                  logoData={item.logo_data}
+                  logoUrl={item.logo_url}
+                />
+                <span className="pulse-chip-name" title={item.name}>
+                  {item.name}
+                </span>
+                <span className="pulse-chip-meta num">
+                  #{item.rank} · ${item.amount_cents / 100}
+                </span>
+                <span className="pulse-chip-when num" suppressHydrationWarning>
+                  {formatListedAt(item.occurred_at)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function PulseStrip({ title, entries }: { title: string; entries: LeaderboardEntry[] }) {
+  return (
+    <div className="pulse-strip">
+      <div className="pulse-label">{title}</div>
+      <ol className="pulse-row">
+        {entries.map((entry) => (
+          <li key={entry.product_id} className={entry.rank === 1 ? 'pulse-chip is-lead' : 'pulse-chip'}>
+            <span className="pulse-chip-rank num">#{entry.rank}</span>
             <Mark
-              letter={item.name[0]?.toUpperCase() ?? '?'}
-              domain={item.domain}
-              logoData={item.logo_data}
-              logoUrl={item.logo_url}
+              letter={entry.name[0]?.toUpperCase() ?? '?'}
+              domain={entry.domain}
+              logoData={entry.logo_data}
+              logoUrl={entry.logo_url}
             />
-            <div className="activity-body">
-              <span className="activity-name" title={item.name}>
-                {item.name}
-              </span>
-              <span className="activity-line num">
-                at #{item.rank} <span aria-hidden="true">·</span> ${item.amount_cents / 100}
-              </span>
-              <span className="activity-when num" suppressHydrationWarning>
-                {formatListedAt(item.occurred_at)}
-              </span>
-            </div>
+            <a
+              className="pulse-chip-name"
+              href={productGoUrl(entry.product_id)}
+              target="_blank"
+              rel="sponsored noopener noreferrer"
+              title={entry.name}
+            >
+              {entry.name}
+            </a>
+            <span className="pulse-chip-meta num">${entry.amount_cents / 100}</span>
           </li>
         ))}
       </ol>
-    </section>
+    </div>
   )
 }
 
@@ -237,71 +316,6 @@ function ClaimSeam({ price, onClaim }: { price: number; onClaim: () => void }) {
     </div>
   )
 }
-
-/**
- * The two recency strips. They are windows over the same standing board, not
- * separate boards: a listing here is also somewhere in the main ranking below.
- * Bids are what make the windows move, so a quiet week renders nothing rather
- * than an empty shell.
- */
-function TopStrips({ daily, weekly }: { daily: LeaderboardEntry[]; weekly: LeaderboardEntry[] }) {
-  if (daily.length === 0 && weekly.length === 0) return null
-
-  return (
-    <section className="top-strips" aria-label="Recent top rankings">
-      <TopStrip title="Today's top ranking" hint="Bids placed in the last 24 hours" entries={daily} />
-      <TopStrip title="This week's top ranking" hint="Bids placed in the last 7 days" entries={weekly} />
-    </section>
-  )
-}
-
-function TopStrip({
-  title,
-  hint,
-  entries,
-}: {
-  title: string
-  hint: string
-  entries: LeaderboardEntry[]
-}) {
-  if (entries.length === 0) return null
-
-  return (
-    <div className="strip">
-      <div className="strip-head">
-        <h2 className="strip-title">
-          <span className="strip-dot" aria-hidden="true" />
-          {title}
-        </h2>
-        <span className="strip-hint">{hint}</span>
-      </div>
-      <ol className="strip-row">
-        {entries.map((entry) => (
-          <li key={entry.product_id} className={entry.rank === 1 ? 'strip-item is-lead' : 'strip-item'}>
-            <span className="strip-rank num">#{entry.rank}</span>
-            <Mark
-              letter={entry.name[0]?.toUpperCase() ?? '?'}
-              domain={entry.domain}
-              logoData={entry.logo_data}
-              logoUrl={entry.logo_url}
-            />
-            <a
-              className="strip-name proj-link"
-              href={productGoUrl(entry.product_id)}
-              target="_blank"
-              rel="sponsored noopener noreferrer"
-              title={entry.name}
-            >
-              {entry.name}
-            </a>
-            <span className="strip-amount num">${entry.amount_cents / 100}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
 export function MarketingPage({
   variant,
   initialBoard = null,
@@ -324,8 +338,7 @@ export function MarketingPage({
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [category, setCategory] = useState('all')
   const [url, setUrl] = useState('')
-
-  // Stripe success: /?paid=<domain>&… — mark the wallet and land on the board.
+  const [heroCategory, setHeroCategory] = useState(DEFAULT_CATEGORY)
   // No "bid placed" modal; the live board already shows the new rank.
   useEffect(() => {
     const paid = searchParams.get('paid')
@@ -363,8 +376,7 @@ export function MarketingPage({
   const inCategory = (item: LeaderboardEntry) =>
     category === 'all' || (item.category ?? DEFAULT_CATEGORY) === category
 
-  // The #1 entry stays in the table as well as the hero card. Slicing it off
-  // meant a board with a single listing rendered as "no projects yet".
+  // #1 lives in the list — no separate hero card repeating it.
   const rankedRows = useMemo(() => entries.filter(inCategory), [category, entries])
   // `unranked` mixes two different things: listings nobody has ever paid for,
   // and paid listings that overflowed their category's slots. They price
@@ -380,6 +392,21 @@ export function MarketingPage({
   )
 
   const detected = url.trim() ? detectCategoryFromUrl(url) : null
+
+  useEffect(() => {
+    if (detected) setHeroCategory(detected)
+  }, [detected])
+
+  function openClaim(options: { bidCents: number | null; fromHero?: boolean }) {
+    if (options.fromHero) {
+      const trimmed = url.trim()
+      if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+        setUrl(`https://${trimmed}`)
+      }
+    }
+    setPendingBidCents(options.bidCents)
+    setClaimOpen(true)
+  }
 
   const stats = useMemo(() => {
     const all = [...entries, ...unranked]
@@ -429,7 +456,7 @@ export function MarketingPage({
   if (!board) {
     return (
       <>
-        <SiteHeader onClaim={() => setClaimOpen(true)} />
+        <SiteHeader onClaim={() => openClaim({ bidCents: null })} />
         <div className="board-loading" role="status">
           Loading today&apos;s board…
         </div>
@@ -442,96 +469,79 @@ export function MarketingPage({
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <SiteHeader onClaim={() => setClaimOpen(true)} />
+      <SiteHeader onClaim={() => openClaim({ bidCents: null })} />
 
-      <section className="hero" aria-label="Hero">
-        <div className="hero-copy">
-          <h1>
-            Who&apos;s on <span className="accent">top</span> today?
-          </h1>
-          <p className="lede">{copy.heroSub}</p>
-        </div>
-
-        {leader ? (
-          <article className="hero-card hero-card-one" aria-label="Today's number one">
-            <div className="hero-card-label">Today&apos;s #1</div>
-            <div className="hero-card-row">
-              <Mark
-                letter={leader.name[0]?.toUpperCase() ?? '?'}
-                domain={leader.domain}
-                logoData={leader.logo_data}
-                logoUrl={leader.logo_url}
-                large
-              />
-              <div className="hero-card-meta">
-                <a
-                  className="name proj-link"
-                  href={productGoUrl(leader.product_id)}
-                  target="_blank"
-                  rel="sponsored noopener noreferrer"
-                >
-                  {leader.name}
-                </a>
-                <p className="desc">{leader.tagline}</p>
-              </div>
-            </div>
-            <div className="hero-card-foot">
-              <div className="bid-block">
-                <div className="label">Current bid</div>
-                <div className="amount num">${leader.amount_cents / 100}</div>
-              </div>
-              <BidStepper value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
-              <button type="button" className="btn btn-primary btn-lg" onClick={() => takeSlot(heroBidUsd)}>
-                Outrank #1 for ${heroBidUsd} →
-              </button>
-            </div>
-          </article>
-        ) : (
-          <article className="hero-card hero-card-one" aria-label="No paid listings yet">
-            {stats.listings > 0 ? (
-              // Free listings are on the board too — calling it "empty" here
-              // told people their own listing hadn't landed.
-              <>
-                <div className="hero-card-label">#1 is unclaimed</div>
-                <p className="desc">
-                  {stats.listings} {stats.listings === 1 ? 'project is' : 'projects are'} listed
-                  today and nobody has bid yet. ${takePrice(0)} takes the top slot.
-                </p>
-                <div className="hero-card-foot">
-                  <BidStepper value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-lg"
-                    onClick={() => takeSlot(heroBidUsd)}
-                  >
-                    Claim #1 · ${heroBidUsd} →
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="hero-card-label">Today&apos;s board is empty</div>
-                <p className="desc">Be the first to add your project below.</p>
-              </>
-            )}
-          </article>
-        )}
-
-        <aside className="hero-side" aria-label="How ranking works">
-          <div className="eyebrow">The rule</div>
-          <p className="hold-line">
-            Highest bid is <span className="accent">#1</span>.
+      <section className="hero-cta" aria-label="Claim a rank">
+        {stats.listings > 0 || stats.boardValue > 0 || stats.clicks > 0 ? (
+          <p className="hero-live num" role="status">
+            <span className="hero-live-dot" aria-hidden="true" />
+            {stats.listings} {stats.listings === 1 ? 'listing' : 'listings'}
+            <span aria-hidden="true"> · </span>
+            ${stats.boardValue} board value
+            <span aria-hidden="true"> · </span>
+            {stats.clicks} clicks today
+            <span aria-hidden="true"> · </span>
+            live board
           </p>
-          <p className="hold-copy">{copy.holdNote}</p>
-          <Link className="text-link" href="#how">
-            Learn how it works →
-          </Link>
-        </aside>
+        ) : null}
+
+        <h1 className="hero-hook">{copy.heroHook}</h1>
+        <p className="hero-price-line">
+          <span>#1 currently costs </span>
+          <BidStepper variant="hero" value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
+        </p>
+        <p className="hero-pitch">{copy.heroPitch}</p>
+
+        <form
+          className="hero-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            openClaim({ bidCents: Math.round(heroBidUsd * 100), fromHero: true })
+          }}
+          noValidate
+        >
+          <label className="hero-field">
+            <span className="hero-field-icon muted" aria-hidden="true">
+              ⌘
+            </span>
+            <input
+              type="text"
+              inputMode="url"
+              autoComplete="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="yoursite.com or @handle"
+              aria-label="Project URL"
+            />
+          </label>
+          <label className="hero-category">
+            <span className="sr-only">Category</span>
+            <select
+              value={heroCategory}
+              onChange={(event) => setHeroCategory(event.target.value)}
+              aria-label="Category"
+            >
+              {selectableCategories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" className="btn btn-primary hero-outbid">
+            {leader ? 'Outbid them' : 'Claim your spot'}
+          </button>
+        </form>
+
+        <p className="hero-foot">
+          <span className="hero-foot-hint">
+            {copy.entryHint}{' '}
+            <button type="button" className="hero-free" onClick={() => openClaim({ bidCents: null, fromHero: true })}>
+              {copy.entryHintFree}
+            </button>
+          </span>
+        </p>
       </section>
-
-      <TopStrips daily={board?.daily_top ?? []} weekly={board?.weekly_top ?? []} />
-
-      <ActivityFeed items={board?.activity ?? []} />
 
       {streamError ? (
         <div className="stream-warning" role="status">
@@ -584,72 +594,6 @@ export function MarketingPage({
         </aside>
 
         <div id="main" className="main-col">
-          <div className="entry-card">
-            <form
-              className="entry"
-              onSubmit={(event) => {
-                event.preventDefault()
-                const trimmed = url.trim()
-                if (!trimmed) return
-                // Accept bare domains (getitsigned.app) — modal / API add https://
-                if (!/^https?:\/\//i.test(trimmed)) {
-                  setUrl(`https://${trimmed}`)
-                }
-                // Free add only — don't carry a price from a prior "claim rank" click.
-                setPendingBidCents(null)
-                setClaimOpen(true)
-              }}
-              noValidate
-            >
-              <label className="field">
-                <span className="muted" aria-hidden="true">
-                  ⌘
-                </span>
-                <input
-                  type="text"
-                  inputMode="url"
-                  autoComplete="url"
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  placeholder="yoursite.com"
-                  aria-label="Project URL"
-                />
-              </label>
-              <button type="submit" className="btn btn-secondary">
-                Add for free
-              </button>
-            </form>
-            <p className="entry-hint">
-              {copy.entryHint}
-              {detected ? (
-                <>
-                  {' '}
-                  · Detected: <strong>{categories.find((c) => c.id === detected)?.label}</strong>
-                </>
-              ) : null}
-            </p>
-          </div>
-
-          {stats.listings > 0 || stats.boardValue > 0 || stats.clicks > 0 ? (
-            <div className="board-stats" aria-label="Board summary">
-              <span>
-                <b className="num">{stats.listings}</b> listings
-              </span>
-              <span className="board-stats-sep" aria-hidden="true">
-                ·
-              </span>
-              <span>
-                <b className="num">${stats.boardValue}</b> board value
-              </span>
-              <span className="board-stats-sep" aria-hidden="true">
-                ·
-              </span>
-              <span>
-                <b className="num">{stats.clicks}</b> clicks today
-              </span>
-            </div>
-          ) : null}
-
           <div className="board-panel">
             {rankedRows.length === 0 && overflowRows.length === 0 && freeRows.length === 0 ? (
               <div className="board-empty">
@@ -833,6 +777,12 @@ export function MarketingPage({
                 })}
               </div>
             )}
+            <BoardPulse
+              daily={board?.daily_top ?? []}
+              weekly={board?.weekly_top ?? []}
+              activity={board?.activity ?? []}
+              leader={leader}
+            />
           </div>
         </div>
       </div>
@@ -855,13 +805,11 @@ export function MarketingPage({
         }}
         onListed={(entry) => {
           setUrl('')
-          // Free add only — pay flows go straight to Stripe from the modal.
           setCategory(entry.category ?? DEFAULT_CATEGORY)
           setListed(entry)
         }}
-        // Outrank flow: empty field so we never prefill the incumbent's URL.
-        // Free-add from the entry bar keeps whatever they typed.
-        initialUrl={pendingBidCents !== null ? '' : url}
+        initialUrl={pendingBidCents !== null ? url : url}
+        initialCategory={heroCategory || detected || ''}
       />
       <ListedModal
         entry={listed}

@@ -8,13 +8,20 @@ export function BidStepper({
   value,
   min,
   onChange,
+  variant = 'default',
 }: {
   value: number
   min: number
   onChange: (next: number) => void
+  /** Large inline control for the hero headline. */
+  variant?: 'default' | 'hero'
 }) {
   return (
-    <div className="bid-stepper" role="group" aria-label="Your bid amount">
+    <div
+      className={variant === 'hero' ? 'bid-stepper is-hero' : 'bid-stepper'}
+      role="group"
+      aria-label="Your bid amount"
+    >
       <button
         type="button"
         className="bid-stepper-btn"
