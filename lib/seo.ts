@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 /** Canonical production origin — used for metadataBase, sitemap, and OG URLs. */
 export const SITE_URL = 'https://whoistop.lol'
 
-export const SITE_NAME = 'WhoIsTop.lol'
+export const SITE_NAME = 'WhoIsTop'
 
 export const SITE_TAGLINE = "Who's on top today?"
 
@@ -27,15 +27,16 @@ export const SITE_KEYWORDS = [
 export const siteMetadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
-    template: `%s · ${SITE_NAME}`,
+    // Short default so browser tabs don't truncate to a useless "Who…"
+    default: 'WhoIsTop — daily startup leaderboard',
+    template: `%s · WhoIsTop`,
   },
   description: SITE_DESCRIPTION,
-  applicationName: SITE_NAME,
+  applicationName: 'WhoIsTop',
   keywords: SITE_KEYWORDS,
-  authors: [{ name: SITE_NAME, url: SITE_URL }],
-  creator: SITE_NAME,
-  publisher: SITE_NAME,
+  authors: [{ name: 'WhoIsTop', url: SITE_URL }],
+  creator: 'WhoIsTop',
+  publisher: 'WhoIsTop',
   category: 'technology',
   alternates: {
     canonical: '/',
@@ -44,8 +45,8 @@ export const siteMetadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: SITE_URL,
-    siteName: SITE_NAME,
-    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    siteName: 'WhoIsTop.lol',
+    title: 'WhoIsTop — daily startup leaderboard',
     description: SITE_DESCRIPTION,
     images: [
       {
@@ -59,7 +60,7 @@ export const siteMetadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    title: 'WhoIsTop — daily startup leaderboard',
     description: SITE_DESCRIPTION,
     images: ['/og.png'],
   },
@@ -78,10 +79,10 @@ export const siteMetadata: Metadata = {
     icon: [
       { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)', sizes: '32x32', type: 'image/png' },
       { url: '/icon-dark-32x32.png', media: '(prefers-color-scheme: dark)', sizes: '32x32', type: 'image/png' },
-      { url: '/logo-mark.png', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
     apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: '/logo-mark.png',
+    shortcut: '/icon-light-32x32.png',
   },
   manifest: '/site.webmanifest',
   other: {
