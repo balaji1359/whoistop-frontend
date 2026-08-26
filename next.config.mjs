@@ -4,6 +4,8 @@ initOpenNextCloudflareForDev()
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Required by @opennextjs/cloudflare (expects .next/standalone)
+  output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
   },
