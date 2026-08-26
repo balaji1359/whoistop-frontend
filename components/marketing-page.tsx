@@ -23,7 +23,7 @@ import {
   valueStrip,
   type MarketingVariant,
 } from '@/lib/data'
-import type { LeaderboardEntry } from '@/lib/api'
+import type { BoardView, LeaderboardEntry } from '@/lib/api'
 import { productGoUrl } from '@/lib/api'
 import { checkoutErrorMessage, startCheckout } from '@/lib/checkout'
 import { formatCount, formatListedAt } from '@/lib/format'
@@ -129,12 +129,19 @@ function ListingBody({
   )
 }
 
-export function MarketingPage({ variant }: { variant: MarketingVariant }) {
+export function MarketingPage({
+  variant,
+  initialBoard = null,
+}: {
+  variant: MarketingVariant
+  /** Fetched server-side by the page component — see `lib/use-board.ts`. */
+  initialBoard?: BoardView | null
+}) {
   const copy = variant === 'arena' ? arena : graffiti
   const wallet = useWallet()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { board, error: streamError } = useBoard()
+  const { board, error: streamError } = useBoard(initialBoard)
   const [claimOpen, setClaimOpen] = useState(false)
   const [listed, setListed] = useState<LeaderboardEntry | null>(null)
   const [details, setDetails] = useState<LeaderboardEntry | null>(null)

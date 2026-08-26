@@ -97,6 +97,10 @@ export function getBoardToday(): Promise<BoardView> {
   return request<BoardView>('/boards/today')
 }
 
+export function getProduct(id: string): Promise<Product> {
+  return request<Product>(`/products/${id}`)
+}
+
 export function createProduct(input: CreateProductInput): Promise<Product> {
   return request<Product>('/products', { method: 'POST', body: JSON.stringify(input) })
 }

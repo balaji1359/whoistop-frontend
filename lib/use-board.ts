@@ -8,9 +8,13 @@ import { boardStreamUrl, getBoardToday, type BoardView } from '@/lib/api'
  * snapshot on connect and again every time a bid is confirmed. EventSource
  * reconnects on its own if the connection drops, so no manual retry loop
  * is needed here.
+ *
+ * `initial` is the board fetched server-side by the page component. Seeding
+ * state with it means the very first render — what a crawler that doesn't
+ * execute JS ever sees — already has real listings, not a loading spinner.
  */
-export function useBoard() {
-  const [board, setBoard] = useState<BoardView | null>(null)
+export function useBoard(initial: BoardView | null = null) {
+  const [board, setBoard] = useState<BoardView | null>(initial)
   const [error, setError] = useState<string | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
 
@@ -18,6 +22,8 @@ export function useBoard() {
     let cancelled = false
 
     // Fast first paint: don't wait on the SSE handshake for the initial view.
+    // Still refetches even with server-provided `initial` — that snapshot may
+    // already be stale by the time this client mounts.
     getBoardToday()
       .then((view) => {
         if (!cancelled) setBoard(view)
