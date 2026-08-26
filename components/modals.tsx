@@ -4,19 +4,36 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   categoryLabel,
   detectCategoryFromUrl,
-  rowActionLabel,
   selectableCategories,
-  takeLeaderLabel,
   takePrice,
 } from '@/lib/data'
-import { formatUsd } from '@/lib/format'
+import { formatAge, formatListedAt, formatUsd } from '@/lib/format'
 import { ApiError, createBidIntent, createProduct, type LeaderboardEntry } from '@/lib/api'
+import { checkoutErrorMessage, startCheckout } from '@/lib/checkout'
 import { fetchLinkPreview, type LinkPreview } from '@/lib/link-preview'
+import { isAppStoreUrl, websiteLogoUrl } from '@/lib/logo'
+import { BidStepper } from '@/components/bid-stepper'
 
+/**
+ * A payment about to be made against a listing that already exists.
+ *
+ * A bid is always "pay this much for that listing" — `/bids/intent` needs a
+ * product_id, and Stripe's hosted page collects only an email, so the listing
+ * can never be established during or after checkout. It used to be collected
+ * in two places: a URL field inside this modal for "take" actions, and the
+ * add-for-free bar for everything else. Now there is one place a listing is
+ * created, and this type only ever describes a payment.
+ */
 export type BidTarget = {
   listing: LeaderboardEntry
-  /** take = displace them with YOUR link; raise = bid on this product (yours) */
-  mode: 'take' | 'raise'
+  /**
+   * What to charge, in cents. The caller sets it, because the price depends
+   * on the slot being bought — moving into #3 costs more than this listing's
+   * own current bid plus an increment.
+   */
+  amountCents: number
+  /** Drives the wording only. */
+  intent: 'rank' | 'raise' | 'defend'
 }
 
 function titleCase(value: string): string {
@@ -89,6 +106,71 @@ function displayHost(url: string): string {
   }
 }
 
+/**
+ * Preview mark: try OG image → scraped logo → Google favicon service → letter.
+ * Scraped apple-touch / favicon URLs often 404 or block hotlinking (google.com
+ * returns apple-touch-icon.png that doesn't load in-browser) — so we always
+ * keep a reliable favicon-service URL in the chain and fall back on error.
+ */
+function PreviewCard({ preview }: { preview: LinkPreview }) {
+  const letter = (preview.siteName || preview.title || displayHost(preview.url) || '?')
+    .replace(/^www\./, '')
+    .slice(0, 1)
+    .toUpperCase()
+  const reliableLogo = websiteLogoUrl(preview.url) || websiteLogoUrl(preview.siteName || '')
+  const markCandidates = [
+    preview.logo,
+    preview.favicon,
+    reliableLogo,
+  ].filter((src, index, all): src is string => Boolean(src) && all.indexOf(src) === index)
+
+  const [markIndex, setMarkIndex] = useState(0)
+  const [bannerFailed, setBannerFailed] = useState(false)
+
+  useEffect(() => {
+    setMarkIndex(0)
+    setBannerFailed(false)
+  }, [preview.url, preview.logo, preview.favicon, preview.image])
+
+  const markSrc = markCandidates[markIndex] ?? null
+  const showBanner = Boolean(preview.image) && !bannerFailed
+
+  return (
+    <article className="claim-preview-card">
+      <div className="claim-preview-media">
+        {showBanner ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview.image!} alt="" onError={() => setBannerFailed(true)} />
+        ) : markSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="claim-preview-logo"
+            src={markSrc}
+            alt=""
+            onError={() => setMarkIndex((i) => i + 1)}
+          />
+        ) : (
+          <div className="claim-preview-fallback">{letter}</div>
+        )}
+        {showBanner && markSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            className="claim-preview-logo-badge"
+            src={markSrc}
+            alt=""
+            onError={() => setMarkIndex((i) => i + 1)}
+          />
+        ) : null}
+      </div>
+      <div className="claim-preview-copy">
+        <span className="claim-preview-host">{preview.siteName || displayHost(preview.url)}</span>
+        <strong>{preview.title || 'Untitled site'}</strong>
+        {preview.description ? <p>{preview.description}</p> : <p className="muted">No description found.</p>}
+      </div>
+    </article>
+  )
+}
+
 function LinkPreviewBlock({
   domain,
   onDomainChange,
@@ -135,24 +217,7 @@ function LinkPreviewBlock({
         ) : null}
 
         {previewStatus === 'ready' && preview ? (
-          <article className="claim-preview-card">
-            <div className="claim-preview-media">
-              {preview.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview.image} alt="" />
-              ) : preview.favicon ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="claim-preview-favicon" src={preview.favicon} alt="" />
-              ) : (
-                <div className="claim-preview-fallback">{(preview.siteName || '?').slice(0, 1).toUpperCase()}</div>
-              )}
-            </div>
-            <div className="claim-preview-copy">
-              <span className="claim-preview-host">{preview.siteName || displayHost(preview.url)}</span>
-              <strong>{preview.title || 'Untitled site'}</strong>
-              {preview.description ? <p>{preview.description}</p> : <p className="muted">No description found.</p>}
-            </div>
-          </article>
+          <PreviewCard preview={preview} />
         ) : null}
 
         {previewStatus === 'idle' ? (
@@ -289,15 +354,21 @@ export function ConnectModal({
   onClose,
   onListed,
   initialUrl = '',
+  pendingBidCents = null,
 }: {
   open: boolean
   onClose: () => void
+  /** Called after a free add. Pay flows redirect to Stripe themselves. */
   onListed?: (entry: LeaderboardEntry) => void
   initialUrl?: string
+  /** Non-null when this add is the first half of buying a ranked slot. */
+  pendingBidCents?: number | null
 }) {
   const [domain, setDomain] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const minBidUsd = takePrice(0)
+  const [bidUsd, setBidUsd] = useState(minBidUsd)
   const { preview, previewStatus, previewError } = useLinkPreview(domain, open)
   // Detected from the URL as edited here, not the one typed on the page —
   // editing the link in this modal used to leave the stale guess attached.
@@ -308,7 +379,10 @@ export function ConnectModal({
     setDomain(initialUrl)
     setError(null)
     reset()
-  }, [open, initialUrl, reset])
+    if (pendingBidCents !== null) {
+      setBidUsd(Math.max(minBidUsd, Math.round(pendingBidCents / 100)))
+    }
+  }, [open, initialUrl, reset, pendingBidCents, minBidUsd])
 
   useEffect(() => {
     if (!open) return
@@ -320,6 +394,8 @@ export function ConnectModal({
   }, [open, onClose])
 
   if (!open) return null
+
+  const paying = pendingBidCents !== null
 
   async function submit() {
     setError(null)
@@ -336,7 +412,10 @@ export function ConnectModal({
     const resolvedName =
       preview?.title?.trim() || preview?.siteName?.trim() || deriveNameFromUrl(url)
     const tagline = (preview?.description || 'Listed on WhoIsTop').slice(0, 160)
-    const logoUrl = preview?.image || preview?.favicon || undefined
+    // Store a real site icon for the board mark — never the OG banner.
+    const logoUrl = isAppStoreUrl(url)
+      ? preview?.logo || preview?.image || websiteLogoUrl(url) || undefined
+      : websiteLogoUrl(url) || preview?.logo || preview?.favicon || undefined
 
     setSubmitting(true)
     try {
@@ -347,7 +426,7 @@ export function ConnectModal({
         category,
         logo_url: logoUrl,
       })
-      onListed?.({
+      const entry: LeaderboardEntry = {
         rank: 0,
         product_id: product.id,
         name: product.name,
@@ -358,10 +437,20 @@ export function ConnectModal({
         cta_text: product.cta_text,
         amount_cents: 0,
         clicks_today: 0,
-      })
+        clicks_total: 0,
+        listed_at: new Date().toISOString(),
+      }
+
+      // Outrank: list then jump straight to Stripe — no confirm modal.
+      if (paying) {
+        await startCheckout(entry, bidUsd * 100)
+        return
+      }
+
+      onListed?.(entry)
       onClose()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not add your project — try again.')
+      setError(paying ? checkoutErrorMessage(err) : err instanceof ApiError ? err.message : 'Could not add your project — try again.')
     } finally {
       setSubmitting(false)
     }
@@ -377,9 +466,25 @@ export function ConnectModal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-claim-head">
-          <h3 id="claim-title">Add your project</h3>
-          <p>Free to list — you’ll appear on today’s board straight away. Bid to take a ranked slot.</p>
+          <h3 id="claim-title">{paying ? 'Your link for this rank' : 'Add your project'}</h3>
+          <p>
+            {paying ? (
+              <>
+                Enter <em>your</em> URL — not the listing you&apos;re beating. Adjust your bid,
+                then pay.
+              </>
+            ) : (
+              <>Free to list — you’ll appear on today’s board straight away. Bid to take a ranked slot.</>
+            )}
+          </p>
         </div>
+
+        {paying ? (
+          <div className="modal-bid-row">
+            <span className="modal-bid-label">Your bid</span>
+            <BidStepper value={bidUsd} min={minBidUsd} onChange={setBidUsd} />
+          </div>
+        ) : null}
 
         <div className="modal-claim-body">
           <LinkPreviewBlock
@@ -401,7 +506,13 @@ export function ConnectModal({
 
         <div className="modal-actions">
           <button type="button" className="btn btn-primary" onClick={submit} disabled={submitting}>
-            {submitting ? 'Adding…' : 'Add for free'}
+            {submitting
+              ? paying
+                ? 'Going to Stripe…'
+                : 'Adding…'
+              : paying
+                ? `Pay · ${formatUsd(bidUsd)}`
+                : 'Add for free'}
           </button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
@@ -419,22 +530,23 @@ export function BidModal({
   target: BidTarget | null
   onClose: () => void
 }) {
-  const [domain, setDomain] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listing = target?.listing ?? null
-  const mode = target?.mode ?? 'take'
-  const needsUrl = mode === 'take'
-  const { preview, previewStatus, previewError } = useLinkPreview(domain, Boolean(listing) && needsUrl)
-  const { category, choose, reset, detected } = useCategoryChoice(domain, preview)
-  const price = listing ? takePrice(listing.amount_cents / 100) : 0
+  const floorUsd = useMemo(() => {
+    if (!target || !listing) return takePrice(0)
+    if (target.intent === 'rank') return takePrice(0)
+    return takePrice(listing.amount_cents / 100)
+  }, [target, listing])
+  const [amountUsd, setAmountUsd] = useState(floorUsd)
 
   useEffect(() => {
     setError(null)
-    setDomain('')
     setSubmitting(false)
-    reset()
-  }, [target, reset])
+    if (target) {
+      setAmountUsd(Math.max(floorUsd, Math.round(target.amountCents / 100)))
+    }
+  }, [target, floorUsd])
 
   useEffect(() => {
     if (!listing) return
@@ -447,17 +559,39 @@ export function BidModal({
 
   if (!listing || !target) return null
 
-  const bidUsd = listing.amount_cents / 100
-  const title =
-    mode === 'raise'
-      ? listing.rank === 1
-        ? `Defend #1 · ${formatUsd(price)}`
-        : listing.rank > 0
-          ? `Raise bid · ${formatUsd(price)}`
-          : `Take a ranked slot · ${formatUsd(price)}`
-      : listing.rank === 1
-        ? takeLeaderLabel(bidUsd)
-        : rowActionLabel(listing.rank, bidUsd, false)
+  const price = amountUsd
+  const currentUsd = listing.amount_cents / 100
+  const host = displayHost(listing.domain)
+
+  const copy = {
+    defend: {
+      title: `Defend #1`,
+      body: (
+        <>
+          Raise <em>{listing.name}</em> to hold #1 (currently {formatUsd(currentUsd)}). Use − / + to
+          set how much you pay.
+        </>
+      ),
+    },
+    raise: {
+      title: `Raise bid`,
+      body: (
+        <>
+          Raise <em>{listing.name}</em> from {formatUsd(currentUsd)}
+          {listing.rank > 0 ? <> — currently #{listing.rank}</> : null}. Dial the amount below.
+        </>
+      ),
+    },
+    rank: {
+      title: `Outrank`,
+      body: (
+        <>
+          Rank <em>{host}</em> in {categoryLabel(listing.category) ?? 'its category'}. Higher bids sit
+          above lower ones — you&apos;re not buying someone else&apos;s listing.
+        </>
+      ),
+    },
+  }[target.intent]
 
   async function confirm() {
     if (!listing || !target) return
@@ -465,47 +599,18 @@ export function BidModal({
     setError(null)
 
     try {
-      let productId = listing.product_id
-      let paidDomain = listing.domain
-
-      if (needsUrl) {
-        const url = normalizeInputUrl(domain)
-        if (!url) {
-          setError('Paste your project URL — that’s what appears on the board.')
-          setSubmitting(false)
-          return
-        }
-        if (!category) {
-          setError('Pick a category — it decides which board you’re ranked on.')
-          setSubmitting(false)
-          return
-        }
-        const name = preview?.title?.trim() || preview?.siteName?.trim() || deriveNameFromUrl(url)
-        const tagline = (preview?.description || 'Listed on WhoIsTop').slice(0, 160)
-        const product = await createProduct({
-          name,
-          domain: url,
-          tagline,
-          category,
-          logo_url: preview?.image || preview?.favicon || undefined,
-        })
-        productId = product.id
-        paidDomain = product.domain
-      }
-
       const origin = window.location.origin
-      const host = displayHost(paidDomain)
       const session = await createBidIntent({
-        product_id: productId,
-        amount_cents: price * 100,
-        success_url: `${origin}/?paid=${encodeURIComponent(paidDomain)}&amount=${price}&rank=${listing.rank || 1}&name=${encodeURIComponent(host)}`,
+        product_id: listing.product_id,
+        amount_cents: Math.round(amountUsd * 100),
+        success_url: `${origin}/?paid=${encodeURIComponent(listing.domain)}&amount=${amountUsd}&name=${encodeURIComponent(host)}`,
         cancel_url: origin,
       })
       window.location.href = session.url
     } catch (err) {
       setSubmitting(false)
       if (err instanceof ApiError && err.status === 503) {
-        setError('Payments aren’t live on this board yet — check back soon.')
+        setError('Payments aren\u2019t live on this board yet — check back soon.')
       } else {
         setError(err instanceof ApiError ? err.message : 'Could not start checkout — try again.')
       }
@@ -515,49 +620,19 @@ export function BidModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className={`modal ${needsUrl ? 'modal-claim' : ''}`}
+        className="modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="bid-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className={needsUrl ? 'modal-claim-head' : undefined}>
-          <h3 id="bid-title">{title}</h3>
-          <p>
-            {mode === 'raise' ? (
-              listing.rank > 0 ? (
-                <>
-                  Raise <em>{listing.name}</em> to {formatUsd(price)} (currently #{listing.rank} at{' '}
-                  {formatUsd(bidUsd)}).
-                </>
-              ) : (
-                <>
-                  <em>{listing.name}</em> is listed for free. Pay {formatUsd(price)} to move it into a
-                  ranked slot in its category.
-                </>
-              )
-            ) : (
-              <>
-                <em>{listing.name}</em> holds #{listing.rank || '—'} at {formatUsd(bidUsd)}. Pay{' '}
-                {formatUsd(price)} and put <strong>your</strong> project in that spot.
-              </>
-            )}
-          </p>
-        </div>
+        <h3 id="bid-title">{copy.title}</h3>
+        <p>{copy.body}</p>
 
-        {needsUrl ? (
-          <div className="modal-claim-body">
-            <LinkPreviewBlock
-              domain={domain}
-              onDomainChange={setDomain}
-              preview={preview}
-              previewStatus={previewStatus}
-              previewError={previewError}
-              autoFocus
-            />
-            <CategorySelect value={category} onChange={choose} detected={detected} />
-          </div>
-        ) : null}
+        <div className="modal-bid-row">
+          <span className="modal-bid-label">Your bid</span>
+          <BidStepper value={amountUsd} min={floorUsd} onChange={setAmountUsd} />
+        </div>
 
         {error ? (
           <p className="modal-meta modal-error" role="alert">
@@ -652,6 +727,105 @@ export function ListedModal({
   )
 }
 
+/**
+ * Everything the board knows about one listing.
+ *
+ * The row can only fit a few numbers, but visitors deciding whether a listing
+ * is worth a click — and founders deciding whether a slot is worth paying for
+ * — want the rest: how long it has been listed, lifetime vs today's clicks,
+ * and where it actually points.
+ */
+export function DetailsModal({
+  entry,
+  rank,
+  yours = false,
+  onClose,
+  onBid,
+}: {
+  entry: LeaderboardEntry | null
+  /** Position within the current view, or null for a free listing. */
+  rank: number | null
+  /** True when this browser already paid for this domain. */
+  yours?: boolean
+  onClose: () => void
+  onBid: (entry: LeaderboardEntry) => void
+}) {
+  useEffect(() => {
+    if (!entry) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [entry, onClose])
+
+  if (!entry) return null
+
+  const paid = entry.amount_cents > 0
+  const price = takePrice(entry.amount_cents / 100)
+  const rows: Array<[string, React.ReactNode]> = [
+    ['Category', categoryLabel(entry.category) ?? 'Other'],
+    [
+      'Listed',
+      <span key="listed" suppressHydrationWarning>
+        {formatListedAt(entry.listed_at)} · {formatAge(entry.listed_at)}
+      </span>,
+    ],
+    ['Clicks today', <span key="ct" className="num">{entry.clicks_today.toLocaleString('en-US')}</span>],
+    ['Clicks all time', <span key="cl" className="num">{entry.clicks_total.toLocaleString('en-US')}</span>],
+    [
+      'Current bid',
+      paid ? <span className="num">{formatUsd(entry.amount_cents / 100)}</span> : 'Free listing — no bid yet',
+    ],
+    ['Position', rank ? `#${rank}` : 'Unranked — below the paid slots'],
+    [
+      'Destination',
+      <a key="dest" className="text-link" href={entry.domain} target="_blank" rel="sponsored noopener noreferrer nofollow">
+        {displayHost(entry.domain)}
+      </a>,
+    ],
+  ]
+
+  const bidLabel = yours
+    ? paid
+      ? `Raise bid · ${formatUsd(price)}`
+      : `Rank yours · ${formatUsd(price)}`
+    : `Outrank with your link · ${formatUsd(price)}`
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal modal-details"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="details-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h3 id="details-title">{entry.name}</h3>
+        <p>{entry.tagline}</p>
+
+        <dl className="detail-grid">
+          {rows.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            Close
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => onBid(entry)}>
+            {bidLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function BidPlacedModal({
   open,
   domain,
@@ -662,7 +836,8 @@ export function BidPlacedModal({
   open: boolean
   domain: string
   amount: number
-  rank: number
+  /** Looked up live from the board; null if it hasn't re-ranked yet. */
+  rank: number | null
   onClose: () => void
 }) {
   if (!open) return null
@@ -679,7 +854,16 @@ export function BidPlacedModal({
       >
         <h3 id="placed-title">Bid placed</h3>
         <p>
-          <em>{host}</em> is now #{rank || 1} for {formatUsd(amount)}.
+          {rank ? (
+            <>
+              <em>{host}</em> is now #{rank} for {formatUsd(amount)}.
+            </>
+          ) : (
+            <>
+              <em>{host}</em>&apos;s payment of {formatUsd(amount)} is confirmed — the board is
+              updating now.
+            </>
+          )}
         </p>
         <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>

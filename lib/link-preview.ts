@@ -2,7 +2,13 @@ export type LinkPreview = {
   url: string
   title: string | null
   description: string | null
+  /** Wide marketing / social share image (og:image) — for preview cards only */
   image: string | null
+  /**
+   * Square-ish app/site icon for board marks — apple-touch-icon or best
+   * sized favicon, never the OG banner.
+   */
+  logo: string | null
   siteName: string | null
   favicon: string | null
 }

@@ -1,7 +1,8 @@
-import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import type { Metadata, Viewport } from 'next'
+import type { Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import { Providers } from '@/app/providers'
+import { siteJsonLd, siteMetadata } from '@/lib/seo'
 import './globals.css'
 
 const inter = Inter({
@@ -16,22 +17,14 @@ const mono = JetBrains_Mono({
   variable: '--font-mono',
 })
 
-export const metadata: Metadata = {
-  title: "whoistop.lol — Who's on top today?",
-  description: 'Daily leaderboard for startups, tools and side projects. Highest bid takes the top spot.',
-  icons: {
-    icon: [
-      { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
-      { url: '/icon-dark-32x32.png', media: '(prefers-color-scheme: dark)' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
-    apple: '/apple-icon.png',
-  },
-}
+export const metadata = siteMetadata
 
 export const viewport: Viewport = {
   colorScheme: 'light',
-  themeColor: '#fafafa',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#fafafa' },
+    { media: '(prefers-color-scheme: dark)', color: '#264653' },
+  ],
 }
 
 export default function RootLayout({
@@ -39,8 +32,16 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const jsonLd = siteJsonLd()
+
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body>
         <Providers>{children}</Providers>
         {process.env.NODE_ENV === 'production' && <Analytics />}

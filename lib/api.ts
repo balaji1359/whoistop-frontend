@@ -27,10 +27,23 @@ export type LeaderboardEntry = {
   domain: string
   tagline: string
   category?: string
+  /** Original image location — kept for reference, not rendered. */
   logo_url?: string
+  /**
+   * Self-hosted 64x64 JPEG data URI, fetched and downscaled by the backend at
+   * submit time. Render this in preference to `logo_url`: hotlinking the
+   * original means broken thumbnails whenever a listed site 404s the image,
+   * blocks hotlinking, or swaps it out.
+   */
+  logo_data?: string
   cta_text: string
   amount_cents: number
+  /** Resets with the board each day. */
   clicks_today: number
+  /** Lifetime clicks — what a visitor judging a listing actually wants. */
+  clicks_total: number
+  /** When the project was first listed (RFC 3339). */
+  listed_at: string
 }
 
 export type Board = {
@@ -103,4 +116,9 @@ export function createBidIntent(input: {
 
 export function boardStreamUrl(): string {
   return `${API_URL}/boards/stream`
+}
+
+/** Public click-through URL — records a click then redirects to the listing. */
+export function productGoUrl(productId: string): string {
+  return `${API_URL}/go/${productId}`
 }

@@ -68,6 +68,61 @@ function absolutize(base: URL, maybe: string | null): string | null {
   }
 }
 
+function parseIconSize(sizes: string | null): number {
+  if (!sizes || sizes === 'any') return 0
+  const match = sizes.match(/(\d+)\s*[x×]\s*(\d+)/i)
+  if (!match) return 0
+  return Math.min(Number(match[1]), Number(match[2]))
+}
+
+function isAppStoreHost(url: URL): boolean {
+  const host = url.hostname.replace(/^www\./, '')
+  return (
+    host === 'apps.apple.com' ||
+    host === 'itunes.apple.com' ||
+    host === 'play.google.com' ||
+    host.endsWith('.apple.com')
+  )
+}
+
+function pickAppLogo(html: string, pageUrl: URL, ogImage: string | null): string | null {
+  // App Store / Play listings: og:image is usually the actual app icon.
+  if (isAppStoreHost(pageUrl) && ogImage) return ogImage
+
+  const links = html.match(/<link\b[^>]*>/gi) ?? []
+  type Candidate = { href: string; score: number }
+  const candidates: Candidate[] = []
+
+  for (const tag of links) {
+    const rel = (attr(tag, 'rel') || '').toLowerCase()
+    const href = attr(tag, 'href')
+    if (!href || href.startsWith('data:')) continue
+    const absolute = absolutize(pageUrl, href)
+    if (!absolute) continue
+
+    const size = parseIconSize(attr(tag, 'sizes'))
+    let score = 0
+    if (rel.includes('apple-touch-icon')) score = 1000 + size
+    else if (rel === 'icon' || rel.includes('shortcut icon') || rel.includes('mask-icon')) {
+      score = 100 + size
+      // Prefer PNG/SVG over ico for board marks
+      if (/\.svg(\?|$)/i.test(absolute) || /image\/svg/i.test(attr(tag, 'type') || '')) score += 40
+      if (/\.png(\?|$)/i.test(absolute) || /image\/png/i.test(attr(tag, 'type') || '')) score += 30
+    } else if (rel.includes('icon')) {
+      score = 50 + size
+    } else {
+      continue
+    }
+    candidates.push({ href: absolute, score })
+  }
+
+  candidates.sort((a, b) => b.score - a.score)
+  if (candidates[0]) return candidates[0].href
+
+  // Last resort: conventional paths (still an icon, not an OG banner)
+  return absolutize(pageUrl, '/apple-touch-icon.png') || absolutize(pageUrl, '/favicon.ico')
+}
+
 function parsePreview(html: string, pageUrl: URL): LinkPreview {
   const title =
     metaContent(html, ['og:title', 'twitter:title']) ||
@@ -84,8 +139,10 @@ function parsePreview(html: string, pageUrl: URL): LinkPreview {
 
   const siteName = metaContent(html, ['og:site_name']) || pageUrl.hostname.replace(/^www\./, '')
 
+  const logo = pickAppLogo(html, pageUrl, image)
+
   const iconHref =
-    html.match(/<link[^>]+rel=["'](?:shortcut icon|icon|apple-touch-icon)["'][^>]*>/i)?.[0] ||
+    html.match(/<link[^>]+rel=["'](?:apple-touch-icon(?:-precomposed)?|shortcut icon|icon)["'][^>]*>/i)?.[0] ||
     html.match(/<link[^>]+rel=["'][^"']*icon[^"']*["'][^>]*>/i)?.[0]
   const favicon = absolutize(pageUrl, iconHref ? attr(iconHref, 'href') : '/favicon.ico')
 
@@ -94,6 +151,7 @@ function parsePreview(html: string, pageUrl: URL): LinkPreview {
     title: title || null,
     description,
     image,
+    logo,
     siteName,
     favicon,
   }

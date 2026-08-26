@@ -71,10 +71,6 @@ export function takePrice(bidUsd: number) {
   return bidUsd + INCREMENT_USD
 }
 
-export function takeLeaderLabel(bidUsd: number) {
-  return `Take #1 for $${takePrice(bidUsd)}`
-}
-
 export function rowActionLabel(rank: number, bidUsd: number, isYours: boolean) {
   const price = takePrice(bidUsd)
   if (isYours) {

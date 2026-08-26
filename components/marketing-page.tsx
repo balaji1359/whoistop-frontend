@@ -5,11 +5,9 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SiteHeader } from '@/components/header'
 import {
-  BidModal,
-  BidPlacedModal,
   ConnectModal,
+  DetailsModal,
   ListedModal,
-  type BidTarget,
 } from '@/components/modals'
 import { useCountdown } from '@/lib/use-countdown'
 import { useBoard } from '@/lib/use-board'
@@ -21,30 +19,113 @@ import {
   detectCategoryFromUrl,
   graffiti,
   rowActionLabel,
-  takeLeaderLabel,
   takePrice,
   valueStrip,
   type MarketingVariant,
 } from '@/lib/data'
 import type { LeaderboardEntry } from '@/lib/api'
+import { productGoUrl } from '@/lib/api'
+import { checkoutErrorMessage, startCheckout } from '@/lib/checkout'
+import { formatCount, formatListedAt } from '@/lib/format'
+import { listingMarkSrc } from '@/lib/logo'
+import { BidStepper } from '@/components/bid-stepper'
 import { useWallet } from '@/components/wallet'
 
-function Mark({ letter, large = false }: { letter: string; large?: boolean }) {
+/**
+ * Row / hero thumbnail — the website's favicon/app icon, never an OG banner.
+ */
+function Mark({
+  letter,
+  domain,
+  logoData,
+  logoUrl,
+  large = false,
+}: {
+  letter: string
+  domain: string
+  logoData?: string
+  logoUrl?: string
+  large?: boolean
+}) {
+  const [failed, setFailed] = useState(false)
+  const src = listingMarkSrc({ domain, logoData, logoUrl })
+  const showImage = Boolean(src) && !failed
+
   return (
-    <div className={large ? 'mark' : 'mark sm'} aria-hidden="true">
-      {letter}
+    <div
+      className={`${large ? 'mark' : 'mark sm'}${showImage ? ' has-image' : ''}`}
+      aria-hidden="true"
+    >
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+      ) : (
+        letter
+      )}
     </div>
   )
 }
 
-function BidDelta({ delta }: { delta: number }) {
-  if (!delta) return null
-  const up = delta > 0
+/**
+ * The middle column of a listing row: thumbnail, headline, metadata line.
+ *
+ * The metadata line sits outside the click-through anchor rather than inside
+ * it. Its category filter and details control are real buttons, and a button
+ * nested inside an anchor is invalid HTML that browsers resolve
+ * inconsistently — clicking the category would navigate off to the listed
+ * site instead of filtering the board.
+ */
+function ListingBody({
+  entry,
+  yours,
+  onCategory,
+  onDetails,
+}: {
+  entry: LeaderboardEntry
+  yours: boolean
+  onCategory: (category: string) => void
+  onDetails: (entry: LeaderboardEntry) => void
+}) {
+  const href = productGoUrl(entry.product_id)
+
   return (
-    <span className={up ? 'delta up' : 'delta down'}>
-      {up ? '↑' : '↓'}
-      {Math.abs(delta)}
-    </span>
+    <div className="listing-main">
+      <a className="listing-link" href={href} target="_blank" rel="sponsored noopener noreferrer" tabIndex={-1}>
+        <Mark
+          letter={entry.name[0]?.toUpperCase() ?? '?'}
+          domain={entry.domain}
+          logoData={entry.logo_data}
+          logoUrl={entry.logo_url}
+        />
+      </a>
+      <div className="listing-copy">
+        <a className="listing-headline" href={href} target="_blank" rel="sponsored noopener noreferrer">
+          <span className="listing-title">
+            <span className="proj-name">{entry.name}</span>
+            {yours ? <span className="you-label">You</span> : null}
+          </span>
+          <span className="listing-desc">{entry.tagline}</span>
+        </a>
+        <div className="listing-meta">
+          <button
+            type="button"
+            className="listing-cat"
+            onClick={() => onCategory(entry.category ?? DEFAULT_CATEGORY)}
+          >
+            {categoryLabel(entry.category) ?? 'Other'}
+          </button>
+          <span aria-hidden="true">·</span>
+          {/* Viewer-local time; the server prerenders this in UTC. */}
+          <span suppressHydrationWarning>{formatListedAt(entry.listed_at)}</span>
+          <span aria-hidden="true">·</span>
+          <b className="num">{formatCount(entry.clicks_total, 'click')}</b>
+          <span aria-hidden="true">·</span>
+          <button type="button" className="listing-details" onClick={() => onDetails(entry)}>
+            see details
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -55,29 +136,50 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
   const searchParams = useSearchParams()
   const { board, error: streamError } = useBoard()
   const [claimOpen, setClaimOpen] = useState(false)
-  const [target, setTarget] = useState<BidTarget | null>(null)
   const [listed, setListed] = useState<LeaderboardEntry | null>(null)
-  const [placed, setPlaced] = useState<{ domain: string; amount: number; rank: number } | null>(null)
+  const [details, setDetails] = useState<LeaderboardEntry | null>(null)
+  // Set when someone clicks a slot they don't own a listing for. The add flow
+  // runs first, then redirects to Stripe — a bid is a payment for a product_id.
+  const [pendingBidCents, setPendingBidCents] = useState<number | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [category, setCategory] = useState('all')
   const [url, setUrl] = useState('')
   const clock = useCountdown(board?.ends_in_seconds)
 
-  // Stripe success: /?paid=<domain>&amount=&rank=&name=
+  // Stripe success: /?paid=<domain>&… — mark the wallet and land on the board.
+  // No "bid placed" modal; the live board already shows the new rank.
   useEffect(() => {
     const paid = searchParams.get('paid')
     if (!paid) return
     wallet.markPaid(paid)
-    const amount = Number(searchParams.get('amount') || '0')
-    const rank = Number(searchParams.get('rank') || '1')
-    setPlaced({ domain: paid, amount: amount || 1, rank: rank || 1 })
     router.replace('/', { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
+
+  async function payFor(entry: LeaderboardEntry, amountCents: number) {
+    setCheckoutError(null)
+    try {
+      await startCheckout(entry, amountCents)
+    } catch (err) {
+      setCheckoutError(checkoutErrorMessage(err))
+    }
+  }
 
   const entries = board?.entries ?? []
   const unranked = board?.unranked ?? []
   const slotsPerCategory = board?.slots_per_category ?? 0
   const leader = entries[0]
+
+  // What it takes to outrank #1 right now — the floor for the hero stepper.
+  // You can always bid more than this, never less: paying anything under it
+  // wouldn't actually take the spot.
+  const minHeroBid = leader ? takePrice(leader.amount_cents / 100) : takePrice(0)
+  const [heroBidUsd, setHeroBidUsd] = useState(minHeroBid)
+  // Ratchet the floor up as the real price moves, but never overwrite a
+  // higher amount you've already dialed in yourself.
+  useEffect(() => {
+    setHeroBidUsd((prev) => Math.max(prev, minHeroBid))
+  }, [minHeroBid])
 
   const inCategory = (item: LeaderboardEntry) =>
     category === 'all' || (item.category ?? DEFAULT_CATEGORY) === category
@@ -124,6 +226,16 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
     return wallet.paidDomains.includes(entry.domain)
   }
 
+  /**
+   * Outrank: the row you clicked only sets the price. We always ask for YOUR
+   * URL, create/reuse YOUR listing, then bid on that product_id — never on
+   * the incumbent's. Their link stays on the board and drops a rank.
+   */
+  function takeSlot(priceUsd: number) {
+    setPendingBidCents(Math.round(priceUsd * 100))
+    setClaimOpen(true)
+  }
+
   if (!board) {
     return (
       <>
@@ -154,9 +266,22 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
           <article className="hero-card hero-card-one" aria-label="Today's number one">
             <div className="hero-card-label">Today&apos;s #1</div>
             <div className="hero-card-row">
-              <Mark letter={leader.name[0]?.toUpperCase() ?? '?'} large />
+              <Mark
+                letter={leader.name[0]?.toUpperCase() ?? '?'}
+                domain={leader.domain}
+                logoData={leader.logo_data}
+                logoUrl={leader.logo_url}
+                large
+              />
               <div className="hero-card-meta">
-                <div className="name">{leader.name}</div>
+                <a
+                  className="name proj-link"
+                  href={productGoUrl(leader.product_id)}
+                  target="_blank"
+                  rel="sponsored noopener noreferrer"
+                >
+                  {leader.name}
+                </a>
                 <p className="desc">{leader.tagline}</p>
               </div>
             </div>
@@ -165,8 +290,9 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
                 <div className="label">Current bid</div>
                 <div className="amount num">${leader.amount_cents / 100}</div>
               </div>
-              <button type="button" className="btn btn-primary btn-lg" onClick={() => setTarget({ listing: leader, mode: 'take' })}>
-                {takeLeaderLabel(leader.amount_cents / 100)} →
+              <BidStepper value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
+              <button type="button" className="btn btn-primary btn-lg" onClick={() => takeSlot(heroBidUsd)}>
+                Outrank #1 for ${heroBidUsd} →
               </button>
             </div>
           </article>
@@ -182,12 +308,13 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
                   today and nobody has bid yet. ${takePrice(0)} takes the top slot.
                 </p>
                 <div className="hero-card-foot">
+                  <BidStepper value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
                   <button
                     type="button"
                     className="btn btn-primary btn-lg"
-                    onClick={() => setClaimOpen(true)}
+                    onClick={() => takeSlot(heroBidUsd)}
                   >
-                    Claim #1 · ${takePrice(0)} →
+                    Claim #1 · ${heroBidUsd} →
                   </button>
                 </div>
               </>
@@ -220,6 +347,12 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
       {streamError ? (
         <div className="stream-warning" role="status">
           {streamError}
+        </div>
+      ) : null}
+
+      {checkoutError ? (
+        <div className="stream-warning" role="alert">
+          {checkoutError}
         </div>
       ) : null}
 
@@ -273,6 +406,8 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
                 if (!/^https?:\/\//i.test(trimmed)) {
                   setUrl(`https://${trimmed}`)
                 }
+                // Free add only — don't carry a price from a prior "claim rank" click.
+                setPendingBidCents(null)
                 setClaimOpen(true)
               }}
               noValidate
@@ -357,107 +492,116 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
                 )}
               </div>
             ) : (
-              <table className="board-table">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Project</th>
-                    <th className="r">Clicks</th>
-                    <th className="r">Bid</th>
-                    <th className="r act-col">
-                      <span className="sr-only">Action</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rankedRows.map((entry, index) => {
-                    const yours = isYours(entry)
-                    const bidUsd = entry.amount_cents / 100
-                    // Under a category tab the position is the position in
-                    // that category; under All it's the board-wide rank.
-                    const position = category === 'all' ? entry.rank : index + 1
-                    return (
-                      <tr key={entry.product_id} className={yours ? 'row-yours' : undefined}>
-                        <td className="rank-cell num">#{position}</td>
-                        <td>
-                          <div className="proj">
-                            <Mark letter={entry.name[0]?.toUpperCase() ?? '?'} />
-                            <div>
-                              <b>
-                                <span className="proj-name">{entry.name}</span>
-                                {yours ? <span className="you-label">You</span> : null}
-                              </b>
-                              <small>{entry.tagline}</small>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="r num">{entry.clicks_today}</td>
-                        <td className="r bid-cell num">
-                          ${bidUsd}
-                          <BidDelta delta={0} />
-                        </td>
-                        <td className="r act-col">
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm btn-block"
-                            onClick={() => setTarget({ listing: entry, mode: yours ? 'raise' : 'take' })}
-                          >
-                            {rowActionLabel(position, bidUsd, yours)}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-
-                  {freeRows.length > 0 ? (
-                    <tr className="board-divider-row">
-                      <td colSpan={5}>
-                        <div className="board-divider">
-                          <span>Also listed today</span>
-                          <small>Free listings — no bid yet. $1 moves one into a ranked slot.</small>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-
-                  {freeRows.map((entry, index) => {
-                    const yours = isYours(entry)
-                    return (
-                      <tr
-                        key={entry.product_id}
-                        className={yours ? 'row-free row-yours' : 'row-free'}
+              <div className="listing-list">
+                {rankedRows.map((entry, index) => {
+                  const yours = isYours(entry)
+                  const bidUsd = entry.amount_cents / 100
+                  const position = category === 'all' ? entry.rank : index + 1
+                  const claimPrice = takePrice(bidUsd)
+                  return (
+                    <article
+                      key={entry.product_id}
+                      className={[
+                        'listing-row',
+                        yours ? 'is-yours' : undefined,
+                        position === 1 ? 'is-top' : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <div
+                        className={`listing-rank num ${position <= 3 ? `top-${position}` : ''}`}
+                        aria-label={`Rank ${position}`}
                       >
-                        <td className="rank-cell num">#{rankedRows.length + index + 1}</td>
-                        <td>
-                          <div className="proj">
-                            <Mark letter={entry.name[0]?.toUpperCase() ?? '?'} />
-                            <div>
-                              <b>
-                                <span className="proj-name">{entry.name}</span>
-                                {yours ? <span className="you-label">You</span> : null}
-                              </b>
-                              <small>{entry.tagline}</small>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="r num">{entry.clicks_today}</td>
-                        <td className="r bid-cell">
+                        #{position}
+                      </div>
+                      <ListingBody
+                        entry={entry}
+                        yours={yours}
+                        onCategory={setCategory}
+                        onDetails={setDetails}
+                      />
+                      <div className="listing-side">
+                        <div className="listing-bid num">${bidUsd}</div>
+                        <button
+                          type="button"
+                          className="listing-claim"
+                          onClick={() =>
+                            yours
+                              ? void payFor(entry, takePrice(bidUsd) * 100)
+                              : takeSlot(takePrice(bidUsd))
+                          }
+                        >
+                          {yours
+                            ? rowActionLabel(position, bidUsd, true)
+                            : `Outrank for $${claimPrice} ↗`}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+
+                {freeRows.length > 0 && rankedRows.length > 0 ? (
+                  <div className="board-divider">
+                    <span>Also listed today</span>
+                    <small>Free listings — no bid yet. $1 moves one into a ranked slot.</small>
+                  </div>
+                ) : null}
+
+                {freeRows.length > 0 && rankedRows.length === 0 ? (
+                  <div className="board-divider">
+                    <span>Listed · not ranked yet</span>
+                    <small>
+                      These are free listings. #1 is empty until someone bids — ${takePrice(0)}{' '}
+                      takes it.
+                    </small>
+                  </div>
+                ) : null}
+
+                {freeRows.map((entry) => {
+                  const yours = isYours(entry)
+                  const claimPrice = takePrice(0)
+                  return (
+                    <article
+                      key={entry.product_id}
+                      className={['listing-row', 'is-free', yours ? 'is-yours' : undefined]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <div
+                        className="listing-rank num is-unranked"
+                        aria-label="Unranked free listing"
+                      >
+                        —
+                      </div>
+                      <ListingBody
+                        entry={entry}
+                        yours={yours}
+                        onCategory={setCategory}
+                        onDetails={setDetails}
+                      />
+                      <div className="listing-side">
+                        <div className="listing-bid">
                           <span className="free-badge">Free</span>
-                        </td>
-                        <td className="r act-col">
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm btn-block"
-                            onClick={() => setTarget({ listing: entry, mode: 'raise' })}
-                          >
-                            Take a slot · ${takePrice(0)}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                        <button
+                          type="button"
+                          className="listing-claim"
+                          onClick={() =>
+                            yours
+                              ? void payFor(entry, takePrice(0) * 100)
+                              : takeSlot(takePrice(0))
+                          }
+                        >
+                          {yours
+                            ? `Rank yours · $${claimPrice} ↗`
+                            : `Outrank for $${claimPrice} ↗`}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -474,18 +618,20 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
 
       <ConnectModal
         open={claimOpen}
-        onClose={() => setClaimOpen(false)}
-        onListed={(entry) => {
-          // Confirm the free listing landed. Bidding is offered from there,
-          // never forced on the way out of a free add.
-          setListed(entry)
-          setUrl('')
-          // Jump the board to where it landed, so closing the confirmation
-          // leaves you looking at your own listing rather than at whichever
-          // category tab happened to be selected.
-          setCategory(entry.category ?? DEFAULT_CATEGORY)
+        pendingBidCents={pendingBidCents}
+        onClose={() => {
+          setClaimOpen(false)
+          setPendingBidCents(null)
         }}
-        initialUrl={url}
+        onListed={(entry) => {
+          setUrl('')
+          // Free add only — pay flows go straight to Stripe from the modal.
+          setCategory(entry.category ?? DEFAULT_CATEGORY)
+          setListed(entry)
+        }}
+        // Outrank flow: empty field so we never prefill the incumbent's URL.
+        // Free-add from the entry bar keeps whatever they typed.
+        initialUrl={pendingBidCents !== null ? '' : url}
       />
       <ListedModal
         entry={listed}
@@ -493,16 +639,22 @@ export function MarketingPage({ variant }: { variant: MarketingVariant }) {
         onClose={() => setListed(null)}
         onBid={(entry) => {
           setListed(null)
-          setTarget({ listing: entry, mode: 'raise' })
+          void payFor(entry, takePrice(0) * 100)
         }}
       />
-      <BidModal target={target} onClose={() => setTarget(null)} />
-      <BidPlacedModal
-        open={Boolean(placed)}
-        domain={placed?.domain ?? ''}
-        amount={placed?.amount ?? 0}
-        rank={placed?.rank ?? 1}
-        onClose={() => setPlaced(null)}
+      <DetailsModal
+        entry={details}
+        rank={details && details.amount_cents > 0 ? details.rank : null}
+        yours={details ? isYours(details) : false}
+        onClose={() => setDetails(null)}
+        onBid={(entry) => {
+          setDetails(null)
+          if (isYours(entry)) {
+            void payFor(entry, takePrice(entry.amount_cents / 100) * 100)
+            return
+          }
+          takeSlot(takePrice(entry.amount_cents / 100))
+        }}
       />
     </>
   )

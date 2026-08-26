@@ -19,6 +19,8 @@ export function SiteHeader({ onClaim }: { onClaim: () => void }) {
     <header className="site-header">
       <div className="nav">
         <Link className="logo" href="/" aria-label="WhoIsTop home">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="logo-mark" src="/logo-mark.png" alt="" width={28} height={28} />
           WhoIsTop<span className="logo-tld">.lol</span>
         </Link>
         <nav className={open ? 'nav-links open' : 'nav-links'} aria-label="Main">
