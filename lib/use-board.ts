@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { boardStreamUrl, getBoardToday, type BoardView } from '@/lib/api'
 
 /**
  * Live board state via Server-Sent Events — the backend pushes a fresh
- * snapshot on connect and again every time a bid is confirmed. EventSource
- * reconnects on its own if the connection drops, so no manual retry loop
- * is needed here.
+ * snapshot on connect and again every time a bid is confirmed or a free
+ * listing is added. EventSource reconnects on its own if the connection
+ * drops, so no manual retry loop is needed here.
  *
  * `initial` is the board fetched server-side by the page component. Seeding
  * state with it means the very first render — what a crawler that doesn't
@@ -17,6 +17,16 @@ export function useBoard(initial: BoardView | null = null) {
   const [board, setBoard] = useState<BoardView | null>(initial)
   const [error, setError] = useState<string | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
+
+  const refresh = useCallback(async () => {
+    try {
+      const view = await getBoardToday()
+      setBoard(view)
+      setError(null)
+    } catch {
+      // Stream reconnect or the next publish will recover.
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -55,5 +65,5 @@ export function useBoard(initial: BoardView | null = null) {
     }
   }, [])
 
-  return { board, error }
+  return { board, error, refresh }
 }

@@ -478,7 +478,7 @@ export function ConnectModal({
                 then pay.
               </>
             ) : (
-              <>Free to list — you’ll appear on today’s board straight away. Bid to take a ranked slot.</>
+              <>Free to list — you’ll appear on the board straight away. Bid to take a ranked slot.</>
             )}
           </p>
         </div>
@@ -706,13 +706,12 @@ export function ListedModal({
         ) : (
           <>
             <p>
-              <em>{displayHost(entry.domain)}</em> is listed for free and live on today’s board
-              right now — in <strong>{categoryLabel(entry.category) ?? 'Other'}</strong>, under the
-              ranked slots. Nothing to pay.
+              <em>{displayHost(entry.domain)}</em> is listed for free in{' '}
+              <strong>{categoryLabel(entry.category) ?? 'Other'}</strong>. It shows below the paid
+              ranks until you bid.
             </p>
             <p className="modal-meta">
-              {formatUsd(takePrice(0))} moves it into a ranked slot in that category, above every
-              free listing.
+              {formatUsd(takePrice(0))} puts it into a ranked slot in that category.
             </p>
           </>
         )}

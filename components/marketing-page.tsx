@@ -355,7 +355,7 @@ export function MarketingPage({
 }) {
   const copy = variant === 'arena' ? arena : graffiti
   const wallet = useWallet()
-  const { board, error: streamError } = useBoard(initialBoard)
+  const { board, error: streamError, refresh } = useBoard(initialBoard)
   const [claimOpen, setClaimOpen] = useState(false)
   const [listed, setListed] = useState<LeaderboardEntry | null>(null)
   const [details, setDetails] = useState<LeaderboardEntry | null>(null)
@@ -830,6 +830,9 @@ export function MarketingPage({
           setUrl('')
           setCategory(entry.category ?? DEFAULT_CATEGORY)
           setListed(entry)
+          // Free creates don't wait on SSE — refresh immediately so the new
+          // row is on the board before the success modal closes.
+          void refresh()
         }}
         initialUrl={pendingBidCents !== null ? url : url}
         initialCategory={heroCategory || detected || ''}
