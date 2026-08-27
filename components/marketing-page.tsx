@@ -18,6 +18,7 @@ import {
   detectCategoryFromUrl,
   graffiti,
   rowActionLabel,
+  selectableCategories,
   takePrice,
   valueStrip,
   type BoardPeriod,
@@ -483,6 +484,24 @@ export function MarketingPage({
   }, [entries, unranked])
 
   /**
+   * Category sidebar dollars = live standing spend in that vertical (All = board
+   * total). That's the business signal — how much money is parked there — not
+   * a decorative badge. Entry floor stays on the title tooltip.
+   */
+  const categorySpend = useMemo(() => {
+    const spend = new Map<string, number>()
+    let all = 0
+    for (const entry of entries) {
+      const key = entry.category ?? DEFAULT_CATEGORY
+      const usd = entry.amount_cents / 100
+      spend.set(key, (spend.get(key) ?? 0) + usd)
+      all += usd
+    }
+    spend.set('all', all)
+    return spend
+  }, [entries])
+
+  /**
    * What it costs to get a ranked slot in each category: $1 while the category
    * still has open slots, otherwise a dollar over its cheapest held slot —
    * that's the one you'd displace.
@@ -549,22 +568,21 @@ export function MarketingPage({
         {stats.listings > 0 || stats.boardValue > 0 || stats.clicks > 0 ? (
           <p className="hero-live num" role="status">
             <span className="hero-live-dot" aria-hidden="true" />
+            ${stats.boardValue} on the board
+            <span aria-hidden="true"> · </span>
+            {stats.clicks} verified clicks today
+            <span aria-hidden="true"> · </span>
             {stats.listings} {stats.listings === 1 ? 'listing' : 'listings'}
-            <span aria-hidden="true"> · </span>
-            ${stats.boardValue} board value
-            <span aria-hidden="true"> · </span>
-            {stats.clicks} clicks today
             <span aria-hidden="true"> · </span>
             live board
           </p>
         ) : null}
 
-        <h1 className="hero-hook">{copy.heroHook}</h1>
-        <p className="hero-pitch">{copy.heroPitch}</p>
-        <p className="hero-price-line">
-          <span>#1 currently costs </span>
+        <h1 className="hero-hook hero-hook-bid">
+          <span>{copy.heroHook}</span>
           <BidStepper variant="hero" value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
-        </p>
+        </h1>
+        <p className="hero-pitch">{copy.heroPitch}</p>
 
         <form
           className="hero-form"
@@ -584,23 +602,40 @@ export function MarketingPage({
               autoComplete="url"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
-              placeholder="Paste your product URL here…"
+              placeholder="Your product URL or @handle"
               aria-label="Project URL"
             />
           </label>
+          <label className="hero-category">
+            <span className="sr-only">Category</span>
+            <select
+              value={heroCategory}
+              onChange={(event) => setHeroCategory(event.target.value)}
+              aria-label="Category"
+            >
+              <option value="" disabled>
+                Choose a category
+              </option>
+              {selectableCategories.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="submit" className="btn btn-primary hero-outbid">
-            {leader ? 'Outbid them' : 'List my product'}
+            Outbid
           </button>
         </form>
 
-        {/* Mobile: no URL/category form — open the claim modal instead so the board can lead. */}
+        {/* Mobile: board leads — claim opens the modal instead of the tall form. */}
         <div className="hero-mobile-actions">
           <button
             type="button"
             className="btn btn-primary hero-outbid"
             onClick={() => openClaim({ bidCents: Math.round(heroBidUsd * 100), fromHero: true })}
           >
-            {leader ? `Outbid #1 · $${heroBidUsd}` : 'Claim your spot'}
+            Outbid · ${heroBidUsd}
           </button>
           <button type="button" className="hero-free" onClick={() => openClaim({ bidCents: null, fromHero: true })}>
             {copy.entryHintFree}
@@ -657,9 +692,14 @@ export function MarketingPage({
               onChange={(event) => setCategory(event.target.value)}
             >
               {categories.map((item) => {
-                const price = categoryEntryPrice.get(item.id)
+                const spend = categorySpend.get(item.id) ?? 0
+                const floor = categoryEntryPrice.get(item.id) ?? 1
                 const suffix =
-                  item.id === 'all' ? '' : ` — $${price ?? 1}`
+                  item.id === 'all'
+                    ? spend > 0
+                      ? ` — $${spend}`
+                      : ''
+                    : ` — $${spend > 0 ? spend : floor}`
                 return (
                   <option key={item.id} value={item.id}>
                     {item.label}
@@ -672,7 +712,9 @@ export function MarketingPage({
           <div className="cats-scroll">
             <ul className="cats">
               {categories.map((item) => {
-                const price = categoryEntryPrice.get(item.id)
+                const spend = categorySpend.get(item.id) ?? 0
+                const floor = categoryEntryPrice.get(item.id) ?? 1
+                const shown = item.id === 'all' ? spend : spend > 0 ? spend : floor
                 return (
                   <li key={item.id}>
                     <button
@@ -682,18 +724,16 @@ export function MarketingPage({
                       onClick={() => setCategory(item.id)}
                     >
                       <span className="cat-label">{item.label}</span>
-                      {item.id !== 'all' ? (
-                        <span
-                          className="num cat-floor"
-                          title={
-                            price !== undefined && price > 1
-                              ? 'Every slot is held — this is what it costs to displace the cheapest'
-                              : 'Slots still open at the minimum bid'
-                          }
-                        >
-                          — ${price ?? 1}
-                        </span>
-                      ) : null}
+                      <span
+                        className="num cat-floor"
+                        title={
+                          spend > 0
+                            ? `$${spend} in standing bids in this category`
+                            : 'No paid bids yet — entry from $1'
+                        }
+                      >
+                        — ${shown}
+                      </span>
                     </button>
                   </li>
                 )

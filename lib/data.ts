@@ -56,10 +56,11 @@ export const selectableCategories: Category[] = categories.filter((c) => c.id !=
 export const DEFAULT_CATEGORY = 'other'
 
 export const graffiti = {
-  heroHook: 'Every product deserves to be WhoIsTop.',
-  heroPitch: 'LISTING STARTS AT $1 · RANK HOLDS UNTIL OUTBID',
-  entryHint: 'Websites, startups, apps, X & Instagram profiles welcome.',
-  entryHintFree: 'List for free',
+  heroHook: 'Claim #1 for',
+  heroPitch:
+    'New spots start at $1. Paying less than #1 still ranks you wherever that bid can take. Your slot holds until somebody outbids you.',
+  entryHint: 'Websites, X, Instagram, App Store and Google Play links supported.',
+  entryHintFree: 'Add for free',
   holdNote:
     'Your slot holds until somebody outbids it. No nightly reset, no re-buying the spot you already paid for.',
 }
