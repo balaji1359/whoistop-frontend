@@ -18,7 +18,6 @@ import {
   detectCategoryFromUrl,
   graffiti,
   rowActionLabel,
-  selectableCategories,
   takePrice,
   valueStrip,
   type BoardPeriod,
