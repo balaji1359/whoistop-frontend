@@ -564,6 +564,27 @@ export function MarketingPage({
           <div className="side-head">
             <div className="eyebrow">Categories</div>
           </div>
+          {/* Mobile: one select. Desktop: chip list. 28 chips must not eat the first screen. */}
+          <label className="cats-select-wrap">
+            <span className="sr-only">Category</span>
+            <select
+              className="cats-select"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+            >
+              {categories.map((item) => {
+                const price = categoryEntryPrice.get(item.id)
+                const suffix =
+                  item.id === 'all' ? '' : ` — $${price ?? 1}`
+                return (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                    {suffix}
+                  </option>
+                )
+              })}
+            </select>
+          </label>
           <div className="cats-scroll">
             <ul className="cats">
               {categories.map((item) => {
