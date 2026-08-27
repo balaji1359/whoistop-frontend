@@ -107,6 +107,18 @@ function displayHost(url: string): string {
 }
 
 /**
+ * Same mark the preview card shows. Never prefer Google's favicon over a
+ * scraped logo the user already saw — that made TokenQ's yellow-Q preview
+ * land as a different icon on the board.
+ */
+function listingLogoFromPreview(url: string, preview: LinkPreview | null): string | undefined {
+  if (isAppStoreUrl(url)) {
+    return preview?.logo || preview?.image || websiteLogoUrl(url) || undefined
+  }
+  return preview?.logo || preview?.favicon || websiteLogoUrl(url) || undefined
+}
+
+/**
  * Preview mark: try OG image → scraped logo → Google favicon service → letter.
  * Scraped apple-touch / favicon URLs often 404 or block hotlinking (google.com
  * returns apple-touch-icon.png that doesn't load in-browser) — so we always
@@ -117,11 +129,9 @@ function PreviewCard({ preview }: { preview: LinkPreview }) {
     .replace(/^www\./, '')
     .slice(0, 1)
     .toUpperCase()
-  const reliableLogo = websiteLogoUrl(preview.url) || websiteLogoUrl(preview.siteName || '')
   const markCandidates = [
-    preview.logo,
-    preview.favicon,
-    reliableLogo,
+    listingLogoFromPreview(preview.url, preview),
+    websiteLogoUrl(preview.url),
   ].filter((src, index, all): src is string => Boolean(src) && all.indexOf(src) === index)
 
   const [markIndex, setMarkIndex] = useState(0)
@@ -416,10 +426,9 @@ export function ConnectModal({
     const resolvedName =
       preview?.title?.trim() || preview?.siteName?.trim() || deriveNameFromUrl(url)
     const tagline = (preview?.description || 'Listed on WhoIsTop').slice(0, 160)
-    // Store a real site icon for the board mark — never the OG banner.
-    const logoUrl = isAppStoreUrl(url)
-      ? preview?.logo || preview?.image || websiteLogoUrl(url) || undefined
-      : websiteLogoUrl(url) || preview?.logo || preview?.favicon || undefined
+    // Must match PreviewCard's mark order — Google's favicon first was swapping
+    // the icon the user just approved for a different one on the board.
+    const logoUrl = listingLogoFromPreview(url, preview)
 
     setSubmitting(true)
     try {

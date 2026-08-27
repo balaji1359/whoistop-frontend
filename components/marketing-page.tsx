@@ -367,7 +367,7 @@ export function MarketingPage({
 }) {
   const copy = variant === 'arena' ? arena : graffiti
   const wallet = useWallet()
-  const { board, error: streamError, refresh } = useBoard(initialBoard)
+  const { board, error: streamError, refresh, upsertUnranked } = useBoard(initialBoard)
   const [claimOpen, setClaimOpen] = useState(false)
   const [listed, setListed] = useState<LeaderboardEntry | null>(null)
   const [details, setDetails] = useState<LeaderboardEntry | null>(null)
@@ -840,11 +840,14 @@ export function MarketingPage({
         }}
         onListed={(entry) => {
           setUrl('')
-          setCategory(entry.category ?? DEFAULT_CATEGORY)
+          setCategory('all')
+          upsertUnranked(entry)
           setListed(entry)
-          // Free creates don't wait on SSE — refresh immediately so the new
-          // row is on the board before the success modal closes.
-          void refresh()
+          // Defer refresh so the optimistic row commits first; mergeBoard
+          // keeps it if the server snapshot is briefly behind.
+          window.setTimeout(() => {
+            void refresh()
+          }, 0)
         }}
         initialUrl={pendingBidCents !== null ? url : url}
         initialCategory={heroCategory || detected || ''}

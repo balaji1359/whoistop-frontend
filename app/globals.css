@@ -903,6 +903,11 @@ input:focus-visible { outline: none; }
   background: #fff8f5;
   z-index: 1;
 }
+/* Free rows are not in the money game — coral wash makes them look selected. */
+.listing-row.is-free:hover,
+.listing-row.is-free:focus-within {
+  background: var(--z50);
+}
 .listing-row.is-top {
   background: #fff5f0;
   border-bottom-color: var(--accent-border);
