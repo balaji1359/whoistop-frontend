@@ -1653,8 +1653,47 @@ input:focus-visible { outline: none; }
     max-width: 360px;
     min-height: 48px;
   }
-  .board { grid-template-columns: 1fr; padding-top: 12px; }
+  .board { grid-template-columns: 1fr; padding-top: 12px; gap: 12px; }
   .board > .side-card { position: static; }
+  /*
+   * Categories must not eat the first viewport. Drop the card chrome and
+   * eyebrow; one horizontal swipe row sits under the period tabs.
+   */
+  .board > .cats-card {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+  .board > .cats-card .side-head { display: none; }
+  .cats-scroll {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 calc(-1 * var(--shell-pad));
+    padding: 0 var(--shell-pad);
+  }
+  .cats-scroll::-webkit-scrollbar { display: none; }
+  .cats {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    width: max-content;
+    padding-bottom: 2px;
+  }
+  .cats button {
+    width: auto;
+    flex: none;
+    border: 1px solid var(--z200);
+    background: var(--surface);
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+  .cats-group { width: 100%; border-top: 0; margin-top: 0; }
   .nav-links { display: none; }
   .nav-links.open {
     display: flex;
@@ -1678,10 +1717,6 @@ input:focus-visible { outline: none; }
     padding: 0 10px;
     font-size: 13px;
   }
-  .cats-scroll { max-height: 200px; }
-  .cats { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-  .cats button { width: auto; border: 1px solid var(--z200); }
-  .cats-group { width: 100%; border-top: 0; margin-top: 0; }
   .value-strip { grid-template-columns: 1fr; }
   .dash-grid { grid-template-columns: 1fr; }
   .entry { grid-template-columns: 1fr; }
