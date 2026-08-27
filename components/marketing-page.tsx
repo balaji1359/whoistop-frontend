@@ -345,17 +345,22 @@ export function MarketingPage({
     category === 'all' || (item.category ?? DEFAULT_CATEGORY) === category
 
   // Period source: All-time = standing board; Today/Week = standing bids placed
-  // in the rolling window (same payloads as daily_top / weekly_top).
-  const periodEntries = period === 'day' ? dailyTop : period === 'week' ? weeklyTop : entries
+  // in the rolling window. If a window is empty, fall back to All-time so #1
+  // never disappears the way it does on a quiet day (outbids always keeps a list).
+  const periodSource = period === 'day' ? dailyTop : period === 'week' ? weeklyTop : entries
+  const periodEmpty = !isStandingPeriod && periodSource.length === 0
+  const periodEntries = periodEmpty ? entries : periodSource
+  const showingAllTimeFallback = periodEmpty
   const rankedRows = useMemo(() => periodEntries.filter(inCategory), [category, periodEntries])
-  // Free / overflow / claim seam only make sense on the standing all-time board.
+  // Free / overflow / claim seam only on the real standing board (not a window fallback).
+  const showStandingExtras = isStandingPeriod || showingAllTimeFallback
   const overflowRows = useMemo(
-    () => (isStandingPeriod ? unranked.filter((item) => item.amount_cents > 0 && inCategory(item)) : []),
-    [category, isStandingPeriod, unranked],
+    () => (showStandingExtras ? unranked.filter((item) => item.amount_cents > 0 && inCategory(item)) : []),
+    [category, showStandingExtras, unranked],
   )
   const freeRows = useMemo(
-    () => (isStandingPeriod ? unranked.filter((item) => item.amount_cents === 0 && inCategory(item)) : []),
-    [category, isStandingPeriod, unranked],
+    () => (showStandingExtras ? unranked.filter((item) => item.amount_cents === 0 && inCategory(item)) : []),
+    [category, showStandingExtras, unranked],
   )
 
   const detected = url.trim() ? detectCategoryFromUrl(url) : null
@@ -462,11 +467,11 @@ export function MarketingPage({
         ) : null}
 
         <h1 className="hero-hook">{copy.heroHook}</h1>
+        <p className="hero-pitch">{copy.heroPitch}</p>
         <p className="hero-price-line">
           <span>#1 currently costs </span>
           <BidStepper variant="hero" value={heroBidUsd} min={minHeroBid} onChange={setHeroBidUsd} />
         </p>
-        <p className="hero-pitch">{copy.heroPitch}</p>
 
         <form
           className="hero-form"
@@ -486,26 +491,12 @@ export function MarketingPage({
               autoComplete="url"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
-              placeholder="yoursite.com or @handle"
+              placeholder="Paste your product URL here…"
               aria-label="Project URL"
             />
           </label>
-          <label className="hero-category">
-            <span className="sr-only">Category</span>
-            <select
-              value={heroCategory}
-              onChange={(event) => setHeroCategory(event.target.value)}
-              aria-label="Category"
-            >
-              {selectableCategories.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <button type="submit" className="btn btn-primary hero-outbid">
-            {leader ? 'Outbid them' : 'Claim your spot'}
+            {leader ? 'Outbid them' : 'List my product'}
           </button>
         </form>
 
@@ -622,32 +613,10 @@ export function MarketingPage({
           <div className="board-panel">
             {rankedRows.length === 0 && overflowRows.length === 0 && freeRows.length === 0 ? (
               <div className="board-empty">
-                {!isStandingPeriod && periodEntries.length === 0 ? (
-                  <>
-                    <strong>
-                      {period === 'day'
-                        ? 'No standing bids in the last 24 hours'
-                        : 'No standing bids in the last 7 days'}
-                    </strong>
-                    <p>
-                      All-time ranks still hold — nothing resets at midnight. Switch tabs to see
-                      the full board.
-                    </p>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setPeriod('all')}
-                    >
-                      Show All-time
-                    </button>
-                  </>
-                ) : stats.listings > 0 || periodEntries.length > 0 ? (
+                {stats.listings > 0 || periodEntries.length > 0 ? (
                   <>
                     <strong>Nothing in {categoryLabel(category) ?? 'this category'} yet</strong>
-                    <p>
-                      {isStandingPeriod ? 'The board' : period === 'day' ? 'Today' : 'This week'} has
-                      listings in other categories.
-                    </p>
+                    <p>The board has listings in other categories.</p>
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
@@ -665,6 +634,13 @@ export function MarketingPage({
               </div>
             ) : (
               <div className="listing-list">
+                {showingAllTimeFallback ? (
+                  <p className="period-fallback" role="status">
+                    {period === 'day'
+                      ? 'No standing bids in the last 24 hours — showing All-time.'
+                      : 'No standing bids in the last 7 days — showing All-time.'}
+                  </p>
+                ) : null}
                 {rankedRows.map((entry, index) => {
                   const yours = isYours(entry)
                   const bidUsd = entry.amount_cents / 100

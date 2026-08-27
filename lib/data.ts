@@ -56,9 +56,8 @@ export const selectableCategories: Category[] = categories.filter((c) => c.id !=
 export const DEFAULT_CATEGORY = 'other'
 
 export const graffiti = {
-  heroHook: 'Think you belong at the top?',
-  heroPitch:
-    'Add your project. Place a bid. Climb the leaderboard. Every position is up for grabs.',
+  heroHook: 'Every product deserves to be WhoIsTop.',
+  heroPitch: 'LISTING STARTS AT $1 · RANK HOLDS UNTIL OUTBID',
   entryHint: 'Websites, startups, apps, X & Instagram profiles welcome.',
   entryHintFree: 'List for free',
   holdNote:

@@ -213,11 +213,11 @@ input:focus-visible { outline: none; }
 }
 .menu-button { display: none; min-width: 40px; min-height: 40px; font-size: 20px; }
 
-/* ── Hero CTA (centered, outbids-style — no filler cards) ── */
+/* ── Hero CTA — tight so #1 sits near the fold ── */
 .hero-cta {
   max-width: var(--shell);
   margin: 0 auto;
-  padding: 32px var(--shell-pad) 28px;
+  padding: 16px var(--shell-pad) 12px;
   text-align: center;
 }
 .hero-live {
@@ -225,84 +225,91 @@ input:focus-visible { outline: none; }
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 6px 8px;
-  margin-bottom: 20px;
-  padding: 7px 14px;
+  gap: 4px 6px;
+  margin-bottom: 10px;
+  padding: 5px 12px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--z200);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--z600);
   box-shadow: var(--shadow);
 }
 .hero-live-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--up);
   box-shadow: 0 0 0 3px rgb(22 163 74 / .18);
   flex: none;
 }
 .hero-hook {
-  font-size: clamp(32px, 4.8vw, 48px);
+  font-size: clamp(26px, 3.6vw, 36px);
   font-weight: 700;
   letter-spacing: -.035em;
-  line-height: 1.1;
+  line-height: 1.15;
   color: var(--z900);
+  max-width: none;
+  margin: 0;
 }
 .hero-price-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px 12px;
-  margin-top: 14px;
-  font-size: clamp(22px, 3.2vw, 28px);
+  gap: 6px 10px;
+  margin-top: 8px;
+  font-size: clamp(16px, 2.2vw, 20px);
   font-weight: 650;
   letter-spacing: -.02em;
   color: var(--z800);
 }
 .hero-price-line .bid-stepper.is-hero .bid-stepper-amount {
   color: var(--accent);
-  font-size: clamp(22px, 3.2vw, 32px);
+  font-size: clamp(18px, 2.4vw, 24px);
 }
 .hero-price-line .bid-stepper.is-hero .bid-stepper-btn {
-  width: 34px;
-  height: 34px;
-  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
 }
 .hero-pitch {
-  margin: 16px auto 0;
-  max-width: 52ch;
-  font-size: 16px;
-  line-height: 1.55;
-  color: var(--z500);
+  margin: 6px auto 0;
+  max-width: 56ch;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  line-height: 1.35;
+  color: var(--accent);
+  text-transform: uppercase;
 }
 .hero-form {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: stretch;
   justify-content: center;
   gap: 8px;
-  max-width: 760px;
-  margin: 28px auto 0;
-  padding: 6px;
-  background: var(--surface);
-  border: 1px solid var(--z200);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
+  max-width: 640px;
+  margin: 14px auto 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 .hero-field {
-  flex: 1 1 220px;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 48px;
+  min-height: 44px;
+  min-width: 0;
   padding: 0 14px;
-  background: var(--z50);
+  background: var(--surface);
   border: 1px solid var(--z200);
   border-radius: 10px;
+  box-shadow: var(--shadow);
   transition: border-color .15s var(--ease), box-shadow .15s var(--ease);
 }
 .hero-field:focus-within {
@@ -348,14 +355,17 @@ input:focus-visible { outline: none; }
 }
 .hero-outbid {
   flex: 0 0 auto;
-  min-width: 112px;
-  min-height: 48px;
-  padding: 0 24px;
+  width: auto;
+  min-width: 132px;
+  min-height: 44px;
+  padding: 0 20px;
   border-radius: 10px;
+  font-size: 15px;
 }
+.hero-category { display: none; }
 .hero-foot {
-  margin-top: 14px;
-  font-size: 13px;
+  margin-top: 8px;
+  font-size: 12px;
   color: var(--z500);
   text-align: center;
 }
@@ -676,6 +686,16 @@ input:focus-visible { outline: none; }
   background: var(--surface);
   color: var(--z900);
   box-shadow: var(--shadow);
+}
+.period-fallback {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--z50);
+  border: 1px solid var(--z200);
+  font-size: 13px;
+  color: var(--z600);
+  text-align: center;
 }
 
 /* Categories */
@@ -1624,20 +1644,20 @@ input:focus-visible { outline: none; }
   .home-stack > .board { order: -1; }
   .home-stack > .stream-warning { order: -2; }
   .hero-cta {
-    padding: 20px var(--shell-pad) 28px;
+    padding: 12px var(--shell-pad) 16px;
     border-top: 1px solid var(--z200);
   }
-  .hero-live { margin-bottom: 12px; font-size: 12px; padding: 6px 12px; }
-  .hero-hook { font-size: clamp(24px, 7vw, 32px); }
+  .hero-live { margin-bottom: 8px; font-size: 11px; padding: 5px 10px; }
+  .hero-hook { font-size: clamp(22px, 6vw, 28px); }
   .hero-price-line {
-    margin-top: 10px;
-    font-size: 18px;
-  }
-  .hero-price-line .bid-stepper.is-hero .bid-stepper-amount { font-size: 22px; }
-  .hero-price-line .bid-stepper.is-hero .bid-stepper-btn {
-    width: 30px;
-    height: 30px;
+    margin-top: 6px;
     font-size: 16px;
+  }
+  .hero-price-line .bid-stepper.is-hero .bid-stepper-amount { font-size: 18px; }
+  .hero-price-line .bid-stepper.is-hero .bid-stepper-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
   }
   .hero-pitch,
   .hero-form,
@@ -1646,8 +1666,8 @@ input:focus-visible { outline: none; }
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    margin-top: 18px;
+    gap: 8px;
+    margin-top: 12px;
   }
   .hero-mobile-actions .hero-outbid {
     width: 100%;
