@@ -1,3 +1,11 @@
+export type BoardPeriod = 'all' | 'day' | 'week'
+
+export const boardPeriods: { id: BoardPeriod; label: string }[] = [
+  { id: 'all', label: 'All-time' },
+  { id: 'day', label: 'Today' },
+  { id: 'week', label: 'Week' },
+]
+
 export type MarketingVariant = 'graffiti' | 'arena'
 
 export type Category = {

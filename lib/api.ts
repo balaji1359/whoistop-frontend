@@ -89,9 +89,9 @@ export type BoardView = {
    * displayed position comes from where they sit in their category.
    */
   unranked: LeaderboardEntry[]
-  /** Standing bids placed in the last 24 hours, best first. */
+  /** Standing bids placed in the last 24 hours, best first — Today period tab. */
   daily_top: LeaderboardEntry[]
-  /** Standing bids placed in the last 7 days, best first. */
+  /** Standing bids placed in the last 7 days, best first — Week period tab. */
   weekly_top: LeaderboardEntry[]
   /**
    * The most recent paid moves. Rides the board payload rather than a separate

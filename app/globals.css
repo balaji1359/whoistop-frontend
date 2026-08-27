@@ -651,6 +651,33 @@ input:focus-visible { outline: none; }
   align-items: start;
 }
 
+.period-bar {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--z100);
+  border: 1px solid var(--z200);
+}
+.period-bar button {
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--z600);
+  white-space: nowrap;
+}
+.period-bar button:hover { color: var(--z900); }
+.period-bar button.active {
+  background: var(--surface);
+  color: var(--z900);
+  box-shadow: var(--shadow);
+}
+
 /* Categories */
 .side-card {
   background: var(--surface);
@@ -1641,6 +1668,16 @@ input:focus-visible { outline: none; }
     padding: 12px 16px 16px;
   }
   .menu-button { display: grid; place-items: center; }
+  .period-bar {
+    justify-self: stretch;
+    width: 100%;
+  }
+  .period-bar button {
+    flex: 1;
+    min-height: 36px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
   .cats-scroll { max-height: 200px; }
   .cats { flex-direction: row; flex-wrap: wrap; gap: 6px; }
   .cats button { width: auto; border: 1px solid var(--z200); }

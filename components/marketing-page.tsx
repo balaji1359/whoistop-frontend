@@ -11,6 +11,7 @@ import {
 import { useBoard } from '@/lib/use-board'
 import {
   arena,
+  boardPeriods,
   categories,
   categoryLabel,
   DEFAULT_CATEGORY,
@@ -20,6 +21,7 @@ import {
   selectableCategories,
   takePrice,
   valueStrip,
+  type BoardPeriod,
   type MarketingVariant,
 } from '@/lib/data'
 import type { ActivityItem, BoardView, LeaderboardEntry } from '@/lib/api'
@@ -141,18 +143,6 @@ function ListingBody({
   )
 }
 
-/**
- * Drop strips that only repeat what's already the #1 row in the main list.
- * On a quiet board one paid listing would otherwise show four times.
- */
-function filterRedundantStrip(entries: LeaderboardEntry[], leader?: LeaderboardEntry) {
-  if (!leader || entries.length === 0) return entries
-  if (entries.length === 1 && entries[0].product_id === leader.product_id && entries[0].rank === 1) {
-    return []
-  }
-  return entries
-}
-
 function filterRedundantActivity(items: ActivityItem[], leader?: LeaderboardEntry) {
   if (!leader || items.length === 0) return items
   if (items.length === 1 && items[0].product_id === leader.product_id && items[0].rank === 1) {
@@ -161,26 +151,14 @@ function filterRedundantActivity(items: ActivityItem[], leader?: LeaderboardEntr
   return items
 }
 
-function sameStrip(a: LeaderboardEntry[], b: LeaderboardEntry[]) {
-  return (
-    a.length === b.length &&
-    a.length > 0 &&
-    a.every((entry, index) => entry.product_id === b[index]?.product_id)
-  )
-}
-
 /**
- * Compact recency + activity band — lives at the bottom of the board panel,
- * not between hero and list. Hidden when it would only restate the #1 row.
+ * Activity band at the bottom of the board. Today / Week live in the header
+ * period tabs now — this only shows recent paid moves.
  */
 function BoardPulse({
-  daily,
-  weekly,
   activity,
   leader,
 }: {
-  daily: LeaderboardEntry[]
-  weekly: LeaderboardEntry[]
   activity: ActivityItem[]
   leader?: LeaderboardEntry
 }) {
@@ -188,12 +166,8 @@ function BoardPulse({
   const [extra, setExtra] = useState<ActivityItem[] | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const dailyShown = filterRedundantStrip(daily, leader)
-  let weeklyShown = filterRedundantStrip(weekly, leader)
-  if (sameStrip(dailyShown, weeklyShown)) weeklyShown = []
   const activityShown = filterRedundantActivity(activity, leader)
-
-  if (dailyShown.length === 0 && weeklyShown.length === 0 && activityShown.length === 0) return null
+  if (activityShown.length === 0) return null
 
   const shown = expanded && extra ? extra : activityShown
 
@@ -215,82 +189,41 @@ function BoardPulse({
 
   return (
     <div className="board-pulse" aria-label="Board activity">
-      {(dailyShown.length > 0 || weeklyShown.length > 0) && (
-        <div className="pulse-strips">
-          {dailyShown.length > 0 ? <PulseStrip title="Today's top" entries={dailyShown} /> : null}
-          {weeklyShown.length > 0 ? (
-            <PulseStrip title="This week's top" entries={weeklyShown} />
-          ) : null}
+      <div className="pulse-activity">
+        <div className="pulse-activity-head">
+          <span className="pulse-label">Latest activity</span>
+          {!expanded ? (
+            <button type="button" className="pulse-more" onClick={showMore} disabled={loading}>
+              {loading ? 'Loading…' : 'Show more'}
+            </button>
+          ) : (
+            <button type="button" className="pulse-more" onClick={() => setExpanded(false)}>
+              Show less
+            </button>
+          )}
         </div>
-      )}
-      {activityShown.length > 0 ? (
-        <div className="pulse-activity">
-          <div className="pulse-activity-head">
-            <span className="pulse-label">Latest activity</span>
-            {!expanded ? (
-              <button type="button" className="pulse-more" onClick={showMore} disabled={loading}>
-                {loading ? 'Loading…' : 'Show more'}
-              </button>
-            ) : (
-              <button type="button" className="pulse-more" onClick={() => setExpanded(false)}>
-                Show less
-              </button>
-            )}
-          </div>
-          <ol className={expanded ? 'pulse-row is-expanded' : 'pulse-row'}>
-            {shown.map((item) => (
-              <li key={`${item.product_id}-${item.occurred_at}`} className="pulse-chip">
-                <Mark
-                  letter={item.name[0]?.toUpperCase() ?? '?'}
-                  domain={item.domain}
-                  logoData={item.logo_data}
-                  logoUrl={item.logo_url}
-                />
-                <span className="pulse-chip-name" title={item.name}>
-                  {item.name}
-                </span>
-                <span className="pulse-chip-meta num">
-                  #{item.rank} · ${item.amount_cents / 100}
-                </span>
-                <span className="pulse-chip-when num" suppressHydrationWarning>
-                  {formatListedAt(item.occurred_at)}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-function PulseStrip({ title, entries }: { title: string; entries: LeaderboardEntry[] }) {
-  return (
-    <div className="pulse-strip">
-      <div className="pulse-label">{title}</div>
-      <ol className="pulse-row">
-        {entries.map((entry) => (
-          <li key={entry.product_id} className={entry.rank === 1 ? 'pulse-chip is-lead' : 'pulse-chip'}>
-            <span className="pulse-chip-rank num">#{entry.rank}</span>
-            <Mark
-              letter={entry.name[0]?.toUpperCase() ?? '?'}
-              domain={entry.domain}
-              logoData={entry.logo_data}
-              logoUrl={entry.logo_url}
-            />
-            <a
-              className="pulse-chip-name"
-              href={productGoUrl(entry.product_id)}
-              target="_blank"
-              rel="sponsored noopener noreferrer"
-              title={entry.name}
-            >
-              {entry.name}
-            </a>
-            <span className="pulse-chip-meta num">${entry.amount_cents / 100}</span>
-          </li>
-        ))}
-      </ol>
+        <ol className={expanded ? 'pulse-row is-expanded' : 'pulse-row'}>
+          {shown.map((item) => (
+            <li key={`${item.product_id}-${item.occurred_at}`} className="pulse-chip">
+              <Mark
+                letter={item.name[0]?.toUpperCase() ?? '?'}
+                domain={item.domain}
+                logoData={item.logo_data}
+                logoUrl={item.logo_url}
+              />
+              <span className="pulse-chip-name" title={item.name}>
+                {item.name}
+              </span>
+              <span className="pulse-chip-meta num">
+                #{item.rank} · ${item.amount_cents / 100}
+              </span>
+              <span className="pulse-chip-when num" suppressHydrationWarning>
+                {formatListedAt(item.occurred_at)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
     </div>
   )
 }
@@ -376,6 +309,7 @@ export function MarketingPage({
   const [pendingBidCents, setPendingBidCents] = useState<number | null>(null)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const [category, setCategory] = useState('all')
+  const [period, setPeriod] = useState<BoardPeriod>('all')
   const [url, setUrl] = useState('')
   const [heroCategory, setHeroCategory] = useState(DEFAULT_CATEGORY)
 
@@ -390,12 +324,15 @@ export function MarketingPage({
 
   const entries = board?.entries ?? []
   const unranked = board?.unranked ?? []
+  const dailyTop = board?.daily_top ?? []
+  const weeklyTop = board?.weekly_top ?? []
   const slotsPerCategory = board?.slots_per_category ?? 0
   const leader = entries[0]
+  const isStandingPeriod = period === 'all'
 
   // What it takes to outrank #1 right now — the floor for the hero stepper.
   // You can always bid more than this, never less: paying anything under it
-  // wouldn't actually take the spot.
+  // wouldn't actually take the spot. Always from all-time — that is the real board.
   const minHeroBid = leader ? takePrice(leader.amount_cents / 100) : takePrice(0)
   const [heroBidUsd, setHeroBidUsd] = useState(minHeroBid)
   // Ratchet the floor up as the real price moves, but never overwrite a
@@ -407,19 +344,18 @@ export function MarketingPage({
   const inCategory = (item: LeaderboardEntry) =>
     category === 'all' || (item.category ?? DEFAULT_CATEGORY) === category
 
-  // #1 lives in the list — no separate hero card repeating it.
-  const rankedRows = useMemo(() => entries.filter(inCategory), [category, entries])
-  // `unranked` mixes two different things: listings nobody has ever paid for,
-  // and paid listings that overflowed their category's slots. They price
-  // completely differently — outranking a free listing costs $1, outranking a
-  // paid one costs its bid plus the increment — so they cannot share a row.
+  // Period source: All-time = standing board; Today/Week = standing bids placed
+  // in the rolling window (same payloads as daily_top / weekly_top).
+  const periodEntries = period === 'day' ? dailyTop : period === 'week' ? weeklyTop : entries
+  const rankedRows = useMemo(() => periodEntries.filter(inCategory), [category, periodEntries])
+  // Free / overflow / claim seam only make sense on the standing all-time board.
   const overflowRows = useMemo(
-    () => unranked.filter((item) => item.amount_cents > 0 && inCategory(item)),
-    [category, unranked],
+    () => (isStandingPeriod ? unranked.filter((item) => item.amount_cents > 0 && inCategory(item)) : []),
+    [category, isStandingPeriod, unranked],
   )
   const freeRows = useMemo(
-    () => unranked.filter((item) => item.amount_cents === 0 && inCategory(item)),
-    [category, unranked],
+    () => (isStandingPeriod ? unranked.filter((item) => item.amount_cents === 0 && inCategory(item)) : []),
+    [category, isStandingPeriod, unranked],
   )
 
   const detected = url.trim() ? detectCategoryFromUrl(url) : null
@@ -489,7 +425,7 @@ export function MarketingPage({
       <>
         <SiteHeader onClaim={() => openClaim({ bidCents: null })} />
         <div className="board-loading" role="status">
-          Loading today&apos;s board…
+          Loading the board…
         </div>
       </>
     )
@@ -610,6 +546,20 @@ export function MarketingPage({
       ) : null}
 
       <div className="board">
+        <div className="period-bar" role="tablist" aria-label="Board period">
+          {boardPeriods.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={period === item.id}
+              className={period === item.id ? 'active' : undefined}
+              onClick={() => setPeriod(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
         <aside id="categories" className="side-card cats-card" aria-label="Categories">
           <div className="side-head">
             <div className="eyebrow">Categories</div>
@@ -651,15 +601,31 @@ export function MarketingPage({
           <div className="board-panel">
             {rankedRows.length === 0 && overflowRows.length === 0 && freeRows.length === 0 ? (
               <div className="board-empty">
-                {stats.listings > 0 ? (
-                  // The board isn't empty — this tab is. Say which, and offer
-                  // the way out: a listing filed under another category used
-                  // to just look like it had vanished.
+                {!isStandingPeriod && periodEntries.length === 0 ? (
+                  <>
+                    <strong>
+                      {period === 'day'
+                        ? 'No standing bids in the last 24 hours'
+                        : 'No standing bids in the last 7 days'}
+                    </strong>
+                    <p>
+                      All-time ranks still hold — nothing resets at midnight. Switch tabs to see
+                      the full board.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setPeriod('all')}
+                    >
+                      Show All-time
+                    </button>
+                  </>
+                ) : stats.listings > 0 || periodEntries.length > 0 ? (
                   <>
                     <strong>Nothing in {categoryLabel(category) ?? 'this category'} yet</strong>
                     <p>
-                      Today&apos;s board has {stats.listings}{' '}
-                      {stats.listings === 1 ? 'listing' : 'listings'} in other categories.
+                      {isStandingPeriod ? 'The board' : period === 'day' ? 'Today' : 'This week'} has
+                      listings in other categories.
                     </p>
                     <button
                       type="button"
@@ -671,10 +637,8 @@ export function MarketingPage({
                   </>
                 ) : (
                   <>
-                    <strong>Nothing on today&apos;s board yet</strong>
-                    <p>
-                      Listing is free — then bid from $1 to take a ranked slot.
-                    </p>
+                    <strong>Nothing on the board yet</strong>
+                    <p>Listing is free — then bid from $1 to take a ranked slot.</p>
                   </>
                 )}
               </div>
@@ -831,12 +795,7 @@ export function MarketingPage({
                 })}
               </div>
             )}
-            <BoardPulse
-              daily={board?.daily_top ?? []}
-              weekly={board?.weekly_top ?? []}
-              activity={board?.activity ?? []}
-              leader={leader}
-            />
+            <BoardPulse activity={board?.activity ?? []} leader={leader} />
           </div>
         </div>
       </div>
