@@ -35,16 +35,35 @@ export function websiteLogoUrl(rawDomainOrUrl: string, size = 256): string | nul
 }
 
 /**
- * Best mark image for a listing: store app icon when it's an app-store URL,
- * otherwise the website favicon. Never prefer a stored OG banner.
+ * Best mark image for a listing.
+ *
+ * Prefer the backend-stored thumbnail (`logo_data`) — it was fetched at list
+ * time and doesn't depend on Google's favicon service returning a blank tile.
+ * App Store / Play URLs may keep a scraped app icon in `logo_url`.
  */
 export function listingMarkSrc(opts: {
   domain: string
   logoData?: string
   logoUrl?: string
 }): string | undefined {
-  if (isAppStoreUrl(opts.domain)) {
-    return opts.logoData || opts.logoUrl || websiteLogoUrl(opts.domain) || undefined
+  if (opts.logoData) return opts.logoData
+  if (isAppStoreUrl(opts.domain) && opts.logoUrl) return opts.logoUrl
+  return websiteLogoUrl(opts.domain) || opts.logoUrl || undefined
+}
+
+/** Ordered fallbacks for a mark — try the next on load/decode failure. */
+export function listingMarkCandidates(opts: {
+  domain: string
+  logoData?: string
+  logoUrl?: string
+}): string[] {
+  const out: string[] = []
+  const push = (value?: string | null) => {
+    if (value && !out.includes(value)) out.push(value)
   }
-  return websiteLogoUrl(opts.domain) || opts.logoData || opts.logoUrl || undefined
+  push(opts.logoData)
+  if (isAppStoreUrl(opts.domain)) push(opts.logoUrl)
+  push(websiteLogoUrl(opts.domain))
+  push(opts.logoUrl)
+  return out
 }

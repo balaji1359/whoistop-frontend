@@ -26,12 +26,14 @@ import type { ActivityItem, BoardView, LeaderboardEntry } from '@/lib/api'
 import { getActivity, productGoUrl } from '@/lib/api'
 import { checkoutErrorMessage, startCheckout } from '@/lib/checkout'
 import { formatCount, formatListedAt } from '@/lib/format'
-import { listingMarkSrc } from '@/lib/logo'
+import { listingMarkCandidates } from '@/lib/logo'
 import { BidStepper } from '@/components/bid-stepper'
 import { useWallet } from '@/components/wallet'
 
 /**
  * Row / hero thumbnail — the website's favicon/app icon, never an OG banner.
+ * Cascades through stored thumbnail → favicon → letter so a blank Google tile
+ * doesn't leave a white square on the #1 row.
  */
 function Mark({
   letter,
@@ -46,9 +48,10 @@ function Mark({
   logoUrl?: string
   large?: boolean
 }) {
-  const [failed, setFailed] = useState(false)
-  const src = listingMarkSrc({ domain, logoData, logoUrl })
-  const showImage = Boolean(src) && !failed
+  const candidates = listingMarkCandidates({ domain, logoData, logoUrl })
+  const [index, setIndex] = useState(0)
+  const src = candidates[index]
+  const showImage = Boolean(src)
 
   return (
     <div
@@ -57,7 +60,13 @@ function Mark({
     >
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setIndex((i) => i + 1)}
+        />
       ) : (
         letter
       )}
@@ -335,12 +344,15 @@ function PaidRedirect({ onPaid }: { onPaid: (domain: string) => void }) {
  * The seam where paid ranking stops. Placed once, not repeated per row: this
  * is the spot where the price of a rank is most obvious, because the listing
  * directly below it is holding a position for nothing.
+ *
+ * Copy must not say "this rank" — sitting under #1 that reads as "take #1 for
+ * $1" while the hero correctly says #1 costs more.
  */
 function ClaimSeam({ price, onClaim }: { price: number; onClaim: () => void }) {
   return (
     <div className="claim-seam">
       <button type="button" className="claim-seam-pill" onClick={onClaim}>
-        Claim this rank for ${price} ↗
+        Get ranked for ${price} ↗
       </button>
     </div>
   )
