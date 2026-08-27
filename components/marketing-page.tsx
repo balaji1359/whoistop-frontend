@@ -151,22 +151,100 @@ function filterRedundantActivity(items: ActivityItem[], leader?: LeaderboardEntr
 }
 
 /**
- * Activity band at the bottom of the board. Today / Week live in the header
- * period tabs now — this only shows recent paid moves.
+ * Drop a period strip that only restates all-time #1 on a quiet board.
+ */
+function filterPeriodStrip(entries: LeaderboardEntry[], leader?: LeaderboardEntry) {
+  if (!leader || entries.length === 0) return entries
+  if (entries.length === 1 && entries[0].product_id === leader.product_id && entries[0].rank === 1) {
+    return []
+  }
+  return entries
+}
+
+function PeriodRankStrip({
+  title,
+  entries,
+  onSeeAll,
+}: {
+  title: string
+  entries: LeaderboardEntry[]
+  onSeeAll: () => void
+}) {
+  if (entries.length === 0) return null
+  const shown = entries.slice(0, 3)
+
+  return (
+    <section className="rank-strip">
+      <div className="rank-strip-head">
+        <h3 className="rank-strip-title">
+          <span className="rank-strip-dot" aria-hidden="true" />
+          {title}
+        </h3>
+        <button type="button" className="rank-strip-all" onClick={onSeeAll}>
+          See all <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <ol className="rank-strip-cards">
+        {shown.map((entry) => (
+          <li key={entry.product_id}>
+            <a
+              className={entry.rank === 1 ? 'rank-card is-lead' : 'rank-card'}
+              href={productGoUrl(entry.product_id)}
+              target="_blank"
+              rel="sponsored noopener noreferrer"
+            >
+              <span className="rank-card-place num">#{entry.rank}</span>
+              <Mark
+                letter={entry.name[0]?.toUpperCase() ?? '?'}
+                domain={entry.domain}
+                logoData={entry.logo_data}
+                logoUrl={entry.logo_url}
+              />
+              <span className="rank-card-name" title={entry.name}>
+                {entry.name}
+              </span>
+              <span className="rank-card-bid num">${entry.amount_cents / 100}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+/**
+ * Creative period strips + activity under the main list — only on All-time so
+ * Today/Week tabs stay the full list, not a duplicated strip.
  */
 function BoardPulse({
+  daily,
+  weekly,
   activity,
   leader,
+  onPeriod,
 }: {
+  daily: LeaderboardEntry[]
+  weekly: LeaderboardEntry[]
   activity: ActivityItem[]
   leader?: LeaderboardEntry
+  onPeriod: (period: BoardPeriod) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const [extra, setExtra] = useState<ActivityItem[] | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const dailyShown = filterPeriodStrip(daily, leader)
+  let weeklyShown = filterPeriodStrip(weekly, leader)
+  if (
+    dailyShown.length > 0 &&
+    weeklyShown.length === dailyShown.length &&
+    weeklyShown.every((e, i) => e.product_id === dailyShown[i]?.product_id)
+  ) {
+    weeklyShown = []
+  }
   const activityShown = filterRedundantActivity(activity, leader)
-  if (activityShown.length === 0) return null
+
+  if (dailyShown.length === 0 && weeklyShown.length === 0 && activityShown.length === 0) return null
 
   const shown = expanded && extra ? extra : activityShown
 
@@ -188,41 +266,57 @@ function BoardPulse({
 
   return (
     <div className="board-pulse" aria-label="Board activity">
-      <div className="pulse-activity">
-        <div className="pulse-activity-head">
-          <span className="pulse-label">Latest activity</span>
-          {!expanded ? (
-            <button type="button" className="pulse-more" onClick={showMore} disabled={loading}>
-              {loading ? 'Loading…' : 'Show more'}
-            </button>
-          ) : (
-            <button type="button" className="pulse-more" onClick={() => setExpanded(false)}>
-              Show less
-            </button>
-          )}
+      {(dailyShown.length > 0 || weeklyShown.length > 0) && (
+        <div className="rank-strips">
+          <PeriodRankStrip
+            title="Today's top ranking"
+            entries={dailyShown}
+            onSeeAll={() => onPeriod('day')}
+          />
+          <PeriodRankStrip
+            title="Week's top ranking"
+            entries={weeklyShown}
+            onSeeAll={() => onPeriod('week')}
+          />
         </div>
-        <ol className={expanded ? 'pulse-row is-expanded' : 'pulse-row'}>
-          {shown.map((item) => (
-            <li key={`${item.product_id}-${item.occurred_at}`} className="pulse-chip">
-              <Mark
-                letter={item.name[0]?.toUpperCase() ?? '?'}
-                domain={item.domain}
-                logoData={item.logo_data}
-                logoUrl={item.logo_url}
-              />
-              <span className="pulse-chip-name" title={item.name}>
-                {item.name}
-              </span>
-              <span className="pulse-chip-meta num">
-                #{item.rank} · ${item.amount_cents / 100}
-              </span>
-              <span className="pulse-chip-when num" suppressHydrationWarning>
-                {formatListedAt(item.occurred_at)}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      )}
+      {activityShown.length > 0 ? (
+        <div className="pulse-activity">
+          <div className="pulse-activity-head">
+            <span className="pulse-label">Latest activity</span>
+            {!expanded ? (
+              <button type="button" className="pulse-more" onClick={showMore} disabled={loading}>
+                {loading ? 'Loading…' : 'Show more'}
+              </button>
+            ) : (
+              <button type="button" className="pulse-more" onClick={() => setExpanded(false)}>
+                Show less
+              </button>
+            )}
+          </div>
+          <ol className={expanded ? 'pulse-row is-expanded' : 'pulse-row'}>
+            {shown.map((item) => (
+              <li key={`${item.product_id}-${item.occurred_at}`} className="pulse-chip">
+                <Mark
+                  letter={item.name[0]?.toUpperCase() ?? '?'}
+                  domain={item.domain}
+                  logoData={item.logo_data}
+                  logoUrl={item.logo_url}
+                />
+                <span className="pulse-chip-name" title={item.name}>
+                  {item.name}
+                </span>
+                <span className="pulse-chip-meta num">
+                  #{item.rank} · ${item.amount_cents / 100}
+                </span>
+                <span className="pulse-chip-when num" suppressHydrationWarning>
+                  {formatListedAt(item.occurred_at)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -791,7 +885,23 @@ export function MarketingPage({
                 })}
               </div>
             )}
-            <BoardPulse activity={board?.activity ?? []} leader={leader} />
+            {period === 'all' ? (
+              <BoardPulse
+                daily={dailyTop}
+                weekly={weeklyTop}
+                activity={board?.activity ?? []}
+                leader={leader}
+                onPeriod={setPeriod}
+              />
+            ) : (
+              <BoardPulse
+                daily={[]}
+                weekly={[]}
+                activity={board?.activity ?? []}
+                leader={leader}
+                onPeriod={setPeriod}
+              />
+            )}
           </div>
         </div>
       </div>

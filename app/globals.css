@@ -539,22 +539,120 @@ input:focus-visible { outline: none; }
 }
 
 /* A row that already has the seam's call to action above it doesn't need to
-   shout the same thing again. */
+   shout the same thing again — outline by default, solid coral + white on hover. */
 .listing-claim.is-quiet {
   background: transparent;
   border: 1px solid var(--z200);
-  color: var(--z600);
+  color: var(--z700);
+  box-shadow: none;
 }
-.listing-claim.is-quiet:hover {
-  border-color: var(--accent-border);
-  color: var(--accent);
+.listing-claim.is-quiet:hover,
+.listing-row:hover .listing-claim.is-quiet,
+.listing-row:focus-within .listing-claim.is-quiet:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgb(239 90 60 / .22);
 }
 
-/* ── Board pulse (compact strips + activity at list bottom) ── */
+/* ── Board pulse: period rank strips + activity ── */
 .board-pulse {
   border-top: 1px solid var(--z200);
-  padding: 16px 18px 18px;
-  background: var(--z50);
+  padding: 20px 18px 18px;
+  background: linear-gradient(180deg, var(--z50) 0%, var(--surface) 100%);
+}
+.rank-strips {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-bottom: 18px;
+}
+.rank-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.rank-strip-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: var(--z900);
+}
+.rank-strip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgb(239 90 60 / .18);
+  flex: none;
+}
+.rank-strip-all {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--z500);
+  padding: 4px 2px;
+}
+.rank-strip-all:hover { color: var(--accent); }
+.rank-strip-cards {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.rank-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--z200);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  transition: border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease);
+}
+.rank-card:hover {
+  border-color: var(--accent-border);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.rank-card.is-lead {
+  border-color: var(--accent-border);
+  background: linear-gradient(135deg, #fff 0%, var(--accent-soft) 100%);
+}
+.rank-card-place {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--z400);
+}
+.rank-card.is-lead .rank-card-place { color: var(--accent); }
+.rank-card .mark.sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.rank-card-name {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--z900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-card-bid {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -.02em;
 }
 .pulse-strips {
   display: grid;
@@ -1126,11 +1224,11 @@ input:focus-visible { outline: none; }
   background: var(--accent);
   padding: 8px 12px;
   border-radius: 999px;
-  box-shadow: 0 4px 14px rgb(239 90 60 / .28);
+  box-shadow: 0 1px 2px rgb(239 90 60 / .18);
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
-  transition: opacity .15s var(--ease), transform .15s var(--ease), background .12s var(--ease);
+  transition: opacity .15s var(--ease), transform .15s var(--ease), background .12s var(--ease), color .12s var(--ease), box-shadow .12s var(--ease), border-color .12s var(--ease);
 }
 .listing-row:hover .listing-claim,
 .listing-row:focus-within .listing-claim {
@@ -1138,10 +1236,14 @@ input:focus-visible { outline: none; }
   transform: translateY(0);
   pointer-events: auto;
 }
-.listing-claim:hover { background: var(--accent-hover); }
+.listing-claim:hover {
+  background: var(--accent-hover);
+  color: #fff;
+}
 .listing-claim:focus-visible {
   outline: none;
-  box-shadow: var(--ring), 0 4px 14px rgb(239 90 60 / .28);
+  color: #fff;
+  box-shadow: var(--ring), 0 2px 8px rgb(239 90 60 / .22);
 }
 
 @media (hover: none) {
@@ -1175,6 +1277,11 @@ input:focus-visible { outline: none; }
 }
 
 @media (max-width: 768px) {
+  .rank-strip-cards {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .rank-card { min-height: 56px; padding: 10px 12px; }
   .listing-row {
     grid-template-columns: 36px minmax(0, 1fr);
     gap: 10px;
