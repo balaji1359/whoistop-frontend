@@ -367,6 +367,7 @@ input:focus-visible { outline: none; }
   text-underline-offset: 3px;
 }
 .hero-free:hover { color: var(--accent); }
+.hero-mobile-actions { display: none; }
 
 .bid-stepper.is-hero { gap: 12px; }
 .bid-stepper.is-hero .bid-stepper-btn {
@@ -1584,11 +1585,48 @@ input:focus-visible { outline: none; }
 }
 
 @media (max-width: 768px) {
-  .hero-cta { padding-top: 20px; }
-  .hero-form { flex-direction: column; padding: 10px; }
-  .hero-category { flex: 1 1 auto; width: 100%; }
-  .hero-outbid { width: 100%; }
-  .board { grid-template-columns: 1fr; }
+  /*
+   * Board first: the product is WhoIsTop (the list), not the add form.
+   * Compact hero sits below with a single CTA into the claim modal.
+   */
+  .home-stack {
+    display: flex;
+    flex-direction: column;
+  }
+  .home-stack > .board { order: -1; }
+  .home-stack > .stream-warning { order: -2; }
+  .hero-cta {
+    padding: 20px var(--shell-pad) 28px;
+    border-top: 1px solid var(--z200);
+  }
+  .hero-live { margin-bottom: 12px; font-size: 12px; padding: 6px 12px; }
+  .hero-hook { font-size: clamp(24px, 7vw, 32px); }
+  .hero-price-line {
+    margin-top: 10px;
+    font-size: 18px;
+  }
+  .hero-price-line .bid-stepper.is-hero .bid-stepper-amount { font-size: 22px; }
+  .hero-price-line .bid-stepper.is-hero .bid-stepper-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }
+  .hero-pitch,
+  .hero-form,
+  .hero-foot { display: none; }
+  .hero-mobile-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+  }
+  .hero-mobile-actions .hero-outbid {
+    width: 100%;
+    max-width: 360px;
+    min-height: 48px;
+  }
+  .board { grid-template-columns: 1fr; padding-top: 12px; }
   .board > .side-card { position: static; }
   .nav-links { display: none; }
   .nav-links.open {

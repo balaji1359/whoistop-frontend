@@ -506,6 +506,11 @@ export function MarketingPage({
       </a>
       <SiteHeader onClaim={() => openClaim({ bidCents: null })} />
 
+      {/*
+        On mobile, `.home-stack` puts the board first — WhoIsTop is the product,
+        not the submission form. Desktop keeps the full hero above the list.
+      */}
+      <div className="home-stack">
       <section className="hero-cta" aria-label="Claim a rank">
         {stats.listings > 0 || stats.boardValue > 0 || stats.clicks > 0 ? (
           <p className="hero-live num" role="status">
@@ -567,6 +572,20 @@ export function MarketingPage({
             {leader ? 'Outbid them' : 'Claim your spot'}
           </button>
         </form>
+
+        {/* Mobile: no URL/category form — open the claim modal instead so the board can lead. */}
+        <div className="hero-mobile-actions">
+          <button
+            type="button"
+            className="btn btn-primary hero-outbid"
+            onClick={() => openClaim({ bidCents: Math.round(heroBidUsd * 100), fromHero: true })}
+          >
+            {leader ? `Outbid #1 · $${heroBidUsd}` : 'Claim your spot'}
+          </button>
+          <button type="button" className="hero-free" onClick={() => openClaim({ bidCents: null, fromHero: true })}>
+            {copy.entryHintFree}
+          </button>
+        </div>
 
         <p className="hero-foot">
           <span className="hero-foot-hint">
@@ -654,7 +673,7 @@ export function MarketingPage({
                   <>
                     <strong>Nothing on today&apos;s board yet</strong>
                     <p>
-                      Add your URL above — listing is free, then bid from $1 to take a ranked slot.
+                      Listing is free — then bid from $1 to take a ranked slot.
                     </p>
                   </>
                 )}
@@ -820,6 +839,7 @@ export function MarketingPage({
             />
           </div>
         </div>
+      </div>
       </div>
 
       <section id="how" className="value-strip">
